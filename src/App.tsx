@@ -3,7 +3,7 @@ import { TranslationContextProvider } from '@/components/lang';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { Theme, TonConnectUIProvider, UIPreferences } from '@tonconnect/ui-react';
 import MainPage from './pages/main';
-import { ThemeProvider, ThemeType } from '@/components/theme';
+import { ThemeProvider } from '@/components/theme';
 import Header from './pages/header';
 
 
