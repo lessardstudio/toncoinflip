@@ -56,7 +56,8 @@ export const en : ILang ={
   project_losing_get: 'income',
   usdtortoken: 'RUBT or TIN',
   wallet: 'Wallet',
-  logout: 'Log out'
+  logout: 'Log out',
+  youChoiceNotify: 'You choice '
 };
 
 export const ru: ILang ={
@@ -87,5 +88,6 @@ export const ru: ILang ={
   project_losing_get: 'доход в',
   usdtortoken: 'RUBT или TIN',
   wallet: 'Кошелек',
-  logout: 'Выход'
+  logout: 'Выход',
+  youChoiceNotify: 'Вы успешно выбрали '
 };

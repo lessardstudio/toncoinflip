@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Bounce, toast } from "react-toastify";
 
+import tonSVG from "@/assets/ton_symbol.svg";
+import notSVG from "@/assets/not_symbol.svg";
+import { useTranslation } from "@/components/lang";
+
 
 const translate = 'translate-y-[0.075rem]'
 const translate_default = 'translate-y-[-0.3rem]'
@@ -48,6 +52,7 @@ export default function ChoseItem () {
         { id: 0, icon: TON, col_back: "#44BDFF", col_fg: "#0098EA" },
         { id: 1, icon: NOT, col_back: "#464646", col_fg: "#000000" },
       ]);
+      const { translations: T } = useTranslation();
 
     const handleIconClick = (id: number) => {
         // Обновляем массив объектов, изменяя только нужный элемент
@@ -57,9 +62,11 @@ export default function ChoseItem () {
         setItems(updatedItems);
         setCoin(id); // Ваша функция для изменения coin
         localStorage.setItem('choseTon', id.toString());
-        toast("NOT choice!", {
-            position: "top-center",
-            autoClose: 2000,
+        toast(
+            <div className="flex flex row items-center gap-1">
+                <img className="w-6 h-6" src={id==0?tonSVG:notSVG} alt="TON" />
+                {T.youChoiceNotify}{id==0?"TON":"NOT"}
+            </div>, {
             hideProgressBar: false,
             closeOnClick: true,
             pauseOnHover: true,
@@ -67,7 +74,7 @@ export default function ChoseItem () {
             progress: undefined,
             theme: localStorage.getItem('vite-ui-theme') as string,
             transition: Bounce,
-            });
+          });
     };
 
     return(

@@ -1,5 +1,5 @@
 
-import { IconSun, IconMoon, IconSunMoon } from '@tabler/icons-react';
+import { Sun,  Moon, Eclipse } from 'lucide-react';
 
  
 import { Button } from "@/components/ui/button"
@@ -27,16 +27,16 @@ export function DropMenuSwitchTheme() {
   function iconTheme(theme: ThemeType){
     switch (theme) {
       case 'light':
-          return {btn: 'ghost', icon: <IconSun className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.light}</Label>}
+          return {btn: 'ghost', icon: <Sun className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.light}</Label>}
         break;
       case 'dark':
-        return {btn: 'ghost', icon: <IconMoon className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.dark}</Label>}
+        return {btn: 'ghost', icon: <Moon className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.dark}</Label>}
         break;
       case 'system':
-        return {btn: 'secondary', icon: <IconSunMoon className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.system}</Label>}
+        return {btn: 'secondary', icon: <Eclipse className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.system}</Label>}
         break;
       default:
-        return {btn: 'secondary', icon: <IconSunMoon className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.system}</Label>}
+        return {btn: 'secondary', icon: <Eclipse className='w-4 h-4'/>, label: <Label className='pl-2 truncate'>{T.system}</Label>}
         break;
     }
   };

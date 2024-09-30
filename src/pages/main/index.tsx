@@ -6,6 +6,7 @@ export default function MainPage() {
     
 
     return (
+        <>
         <div className="flex flex-row gap-x-6">
 
             <div style={{width: 356, textAlign: 'right'}}>
@@ -17,6 +18,7 @@ export default function MainPage() {
 
             <ChoseItem/>
         </div>
+        </>
     );
 }
 

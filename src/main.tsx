@@ -12,9 +12,10 @@ import 'react-toastify/dist/ReactToastify.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastContainer
-      position="top-right"
+      position="bottom-right"
       autoClose={1000}
-                  />
+      limit={5}
+      />
     <App/>
   </StrictMode>,
 )
