@@ -20,13 +20,14 @@ function App() {
   } as UIPreferences;
 
 
-
   return (
     <>
+    
       <TonConnectUIProvider language={initialLocale} manifestUrl={window.location.origin+"/tonconnect-manifest.json"}
         uiPreferences={uiPref}>
         <TranslationContextProvider initialLocale={initialLocale}>
           <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+            
                 
                 <div className="container">
                   <Header/>
@@ -36,6 +37,10 @@ function App() {
                       <Route path="/flips" element={<MainPage/>} />
                     </Routes>
                   </Router>
+
+                  
+                  
+
                 </div>
           </ThemeProvider>
         </TranslationContextProvider>

@@ -1,3 +1,37 @@
+.top-minus-2rem{
+    position: relative;
+    top: -0.5rem;
+    opacity: 0;
+
+
+    &:hover{
+        opacity: 1;
+    }
+}
+
+
+
+
+.text-slogan{
+    color: hsl(var(--foreground));
+    text-align: right;
+    font-family: 'Inter';
+    font-size: 3rem;
+    font-style: normal;
+    font-weight: 800;
+    line-height: 3.75rem;
+    letter-spacing: -0.036rem;
+    user-select: none;
+
+    &.blue{
+        color: hsl(var(--main-col));
+        font-size: 6rem;
+        font-style: normal;
+        font-weight: 800;
+        line-height: 4.875rem;
+        letter-spacing: -0.072rem;
+    }
+}
 
 
 
@@ -8,3 +42,44 @@
     
 }
 
+
+
+.hover_1 {
+    transition: 
+        background 0.2s ease-in-out, 
+        color 0.2s ease-in-out;
+    
+}
+
+
+.hover_1:hover {
+    background: 
+        hsla(var(--main-col) /4%) !important; 
+    color: hsl(var(--main-col));
+
+    &.bg-none{
+        background: transparent !important;
+    }
+}
+
+
+.bg-foreground-6per {
+    background: 
+        hsl(var(--main-col-bg));
+}
+
+
+.logoTon{
+    transition: transform .2s ease-in-out;
+    &:hover{
+        transform:scale(0.9)
+    }
+}
+
+
+
+.width-min {
+  width: -moz-min-content !important;
+  width: min-content !important;
+  min-width: none;
+}

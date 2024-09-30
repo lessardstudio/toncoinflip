@@ -1,85 +1,130 @@
-
-
-import ReactCountryFlag from "react-country-flag"
- 
-import { Button } from "@/components/ui/button"
+import ReactCountryFlag from "react-country-flag";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
-  DropdownMenuGroup
-} from "@/components/ui/dropdown-menu"
-import { Label } from "@/components/ui/label"
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import { Locales, useTonConnectUI } from "@tonconnect/ui-react";
 import { useTranslation } from "@/components/lang";
- 
-export function DropMenuSwitchLang() {
+import { useRef, useState } from "react";
 
+export function DropMenuSwitchLang() {
   const { locale, setLocale } = useTranslation();
-  const [,setOptions] = useTonConnectUI();
+  const [, setOptions] = useTonConnectUI();
   const { translations: T } = useTranslation();
+
   const handleTrans = (locale: 'en' | 'ru') => {
-    const newLocale = locale as 'en' | 'ru';
-    setLocale(newLocale as 'en' | 'ru')
-    setOptions({ language: newLocale as  'en' | 'ru' });
-    localStorage.setItem('lang', newLocale);
+    setLocale(locale);
+    setOptions({ language: locale });
+    localStorage.setItem('lang', locale);
   };
 
-
-  function iconLang(lang: 'en' | 'ru'){
-    switch (lang) {
-      case 'ru':
-          return {text: <Label className="truncate">{T.rus}</Label>,
-              icon: <ReactCountryFlag countryCode="RU" svg style={{
-                width: '1rem',
-                height: '1rem',
-                margin: '0 0 0 0'
-            }} title="RU"/>
-          }
-        break;
-      case 'en':
-          return {text: <Label className="truncate">{T.eng}</Label>,
-              icon: <ReactCountryFlag countryCode="GB" svg style={{
-                width: '1rem',
-                height: '1rem',
-                margin: '0 0 0 0'
-            }} title="GB"/>
-          }
-        break;
-      default:
-        return {text: <Label className="truncate">{T.eng}</Label>,
-          icon: <ReactCountryFlag countryCode="GB" svg style={{
-            width: '1rem',
-            height: '1rem',
-            margin: '0 0.5rem 0 0'
-        }} title="GB"/>
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null); // Для меню
+  const triggerRef = useRef<HTMLButtonElement | null>(null); // Для триггера
+  const isMouseOverMenu = useRef<boolean>(false); // Флаг для отслеживания, курсор над меню
+  const [timeoutId, setTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleMouseToggle = (isEntering:boolean) => {
+    if (isEntering) {
+      setIsOpen(true); // Открываем меню
+      if (timeoutId) {
+        clearTimeout(timeoutId); // Очищаем предыдущий таймаут, если есть
       }
-        break;
+    } else {
+      // Если курсор уходит с триггера
+      if (!isMouseOverMenu.current) {
+        const id = setTimeout(() => {
+          setIsOpen(false); // Закрываем меню
+        }, 100); // Устанавливаем задержку в 300 мс
+        setTimeoutId(id); // Сохраняем идентификатор таймаута
+      }
     }
   };
- 
+  
+  const handleMenuMouseEnter = () => {
+    isMouseOverMenu.current = true; // Устанавливаем флаг при наведении на меню
+    if (timeoutId) {
+      clearTimeout(timeoutId); // Очищаем таймаут, чтобы меню не закрылось
+    }
+  };
+  
+  const handleMenuMouseLeave = () => {
+    isMouseOverMenu.current = false; // Сбрасываем флаг при уходе с меню
+    const id = setTimeout(() => {
+      if (!isMouseOverMenu.current) {
+        setIsOpen(false); // Закрываем меню при уходе с него
+      }
+    }, 100); // Устанавливаем задержку в 300 мс
+    setTimeoutId(id); // Сохраняем идентификатор таймаута
+  };
+
+  function iconLang(lang: 'en' | 'ru') {
+    switch (lang) {
+      case 'ru':
+        return {
+          text: <Label className="truncate">{T.rus}</Label>,
+          icon: <ReactCountryFlag countryCode="RU" svg style={{ width: '1rem', height: '1rem' }} title="RU" />
+        };
+      case 'en':
+        return {
+          text: <Label className="truncate">{T.eng}</Label>,
+          icon: <ReactCountryFlag countryCode="GB" svg style={{ width: '1rem', height: '1rem' }} title="GB" />
+        };
+      default:
+        return {
+          text: <Label className="truncate">{T.eng}</Label>,
+          icon: <ReactCountryFlag countryCode="GB" svg style={{ width: '1rem', height: '1rem' }} title="GB" />
+        };
+    }
+  }
+
+
+const Item: React.FC<{ locale: Locales, className?: string, spanClass?: string }> = ({ locale = 'en' as Locales, className = "", spanClass = ""}) => {
+    return (
+        <DropdownMenuItem onSelect={() => handleTrans(locale)}>
+            <div className={`flex justify-center w-full py-0.5 gap-2 ${className}`}>
+                {iconLang(locale).icon}<span className={`${spanClass}`}>{iconLang(locale).text}</span>
+            </div>
+        </DropdownMenuItem>
+    );
+};
+const items: Locales[] = ['ru', 'en'];
+
   return (
-    <DropdownMenu >
-      <DropdownMenuTrigger  asChild>
-        <Button className="w-max" variant="ghost">
+    <div className="flex flex-col items-center">
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger/>
+          
+        <DropdownMenuContent
+          ref={menuRef}
+          className={`w-max h-max`}
+          onMouseEnter={handleMenuMouseEnter}
+          onMouseLeave={handleMenuMouseLeave}
+        >
+        
+        
+        <Item locale={localStorage.getItem('lang') as Locales} spanClass="font-bold"/>
+          {items.map((lang) => {
+            // Проверяем, нужно ли отображать элемент
+            if (lang !== locale) {
+              return <Item key={lang} locale={lang} />;
+            }
+            return null; // Возвращаем null, если элемент не должен отображаться
+          })}
+        </DropdownMenuContent>
+        <Button className="w-max font-bold" variant="ghost"
+          ref={triggerRef}
+          onMouseEnter={() => handleMouseToggle(true)}
+          onMouseLeave={() => handleMouseToggle(false)}
+          >
           {iconLang(locale).icon}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="width-min">
-          <DropdownMenuItem className="" onSelect={() => handleTrans("ru")}>
-              <div className="flex justify-start w-full py-0.5 gap-2 w-full">
-                {iconLang('ru').icon}
-                {iconLang('ru').text}
-              </div>
-            </DropdownMenuItem>
-          <DropdownMenuItem className="" onSelect={() => handleTrans("en")}>
-            <div className="flex justify-start w-full py-0.5 gap-2 w-full">
-                {iconLang('en').icon}
-                {iconLang('en').text}
-              </div>
-            </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
+          <span className="pl-2 font-bold"> {T.lang}</span>
+          </Button>
+      </DropdownMenu>
+    </div>
+  );
 }

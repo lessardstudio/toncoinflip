@@ -1,9 +1,94 @@
+.top-minus-2rem {
+  position: relative;
+  top: -0.5rem;
+  opacity: 0;
+}
+.top-minus-2rem:hover {
+  opacity: 1;
+}
+
+.text-slogan {
+  color: hsl(var(--foreground));
+  text-align: right;
+  font-family: "Inter";
+  font-size: 3rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 3.75rem;
+  letter-spacing: -0.036rem;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+.text-slogan.blue {
+  color: hsl(var(--main-col));
+  font-size: 6rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 4.875rem;
+  letter-spacing: -0.072rem;
+}
+
 #root {
   height: auto;
 }
 
+.hover_1 {
+  transition: background 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.hover_1:hover {
+  background: hsla(var(--main-col)/4%) !important;
+  color: hsl(var(--main-col));
+}
+.hover_1:hover.bg-none {
+  background: transparent !important;
+}
+
+.bg-foreground-6per {
+  background: hsl(var(--main-col-bg));
+}
+
+.logoTon {
+  transition: transform 0.2s ease-in-out;
+}
+.logoTon:hover {
+  transform: scale(0.9);
+}
+
+.width-min {
+  width: -moz-min-content !important;
+  width: min-content !important;
+  min-width: none;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  src: url("/inter/Inter-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  src: url("/inter/Inter-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  src: url("/inter/Inter-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  src: url("/inter/Inter-700.woff2") format("woff2");
+}
 body {
   min-height: 100vh;
+  font-family: "Inter" !important;
 }
 
 #root {
@@ -11,6 +96,7 @@ body {
   display: flex;
   justify-content: center;
   padding: 0.5rem;
+  font-family: "Inter" !important;
 }
 
 @tailwind base;
@@ -18,7 +104,13 @@ body {
 @tailwind utilities;
 @layer base {
   :root {
-    --background: 0 0% 96%;
+    --toastify-color-light: hsl(var(--main-col-bg)) !important;
+    --toastify-font-family: "Inter" !important;
+    --toastify-text-color-light: hsl(var(--foreground)) !important;
+    --toastify-color-progress-light: hsl(var(--main-col)) !important;
+    --main-col: 201 100% 46%;
+    --main-col-bg: 210 33% 95%;
+    --background: 210 33% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
@@ -40,7 +132,12 @@ body {
     --radius: 0.5rem;
   }
   .dark {
-    --background: 222.2 84% 4.9%;
+    --toastify-color-dark: hsl(var(--main-col-bg)) !important;
+    --toastify-text-color-dark: hsl(var(--foreground)) !important;
+    --toastify-color-progress-dark: hsl(var(--main-col)) !important;
+    --main-col: 201 100% 46%;
+    --main-col-bg: 228 42% 14%;
+    --background: 228 42% 12%;
     --foreground: 210 40% 98%;
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
@@ -70,19 +167,9 @@ body {
     color: hsl(var(--foreground)); /* Assuming you want to use the --foreground variable for text color */
   }
   .bg-background {
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--background)) !important;
   }
   .text-foreground {
-    color: hsl(var(--foreground));
+    color: hsl(var(--foreground)) !important;
   }
-}
-.hover_1:hover {
-  background: hsla(var(--foreground)/6%); /* 10% opacity */
-  color: hsl(var(--foreground));
-}
-
-.width-min {
-  width: -moz-min-content !important;
-  width: min-content !important;
-  min-width: none;
 }/*# sourceMappingURL=index.css.map */

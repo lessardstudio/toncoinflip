@@ -29,14 +29,14 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center rounded-2xl px-2 py-1.5 text-sm outline-none focus:background data-[state=open]:background",
+      "flex  cursor-default select-none items-center rounded-2xl px-2 py-2 text-sm outline-none focus:background data-[state=open]:background",
       inset && "pl-8",
       className
     )}
     {...props}
   >
     {children}
-    <ChevronRightIcon className="ml-auto h-4 w-4" />
+    <ChevronRightIcon className="ml-auto h-6 w-6" />
   </DropdownMenuPrimitive.SubTrigger>
 ))
 DropdownMenuSubTrigger.displayName =
@@ -49,7 +49,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "z-50 min-w-[8rem] overflow-hidden rounded-2xl border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      "z-50 min-w-[8rem] overflow-hidden rounded-2xl border bg-popover  p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
       className
     )}
     {...props}
@@ -67,7 +67,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "transition-colors z-50 min-w-[8rem] overflow-hidden rounded-2xl border-transparent bg-popover p-2 text-popover-foreground shadow-md",
+        "top-minus-2rem z-55 min-w-[2rem] overflow-hidden rounded-2xl border-transparent bg-foreground-6per p-2 text-popover-foreground shadow-md",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className
       )}
@@ -86,7 +86,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "hover_1 bg-transparent truncate w-full relative flex cursor-default select-none items-center rounded-2xl px-3 py-1.5 text-sm outline-none  data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "hover_1 truncate w-full relative flex cursor-default select-none items-center rounded-2xl px-4 py-2.5 text-sm outline-none  data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       inset && "pl-8",
       className
     )}
@@ -184,6 +184,34 @@ const DropdownMenuShortcut = ({
 }
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut"
 
+
+const HoverableDropdownMenu = () => {
+  const [isOpen, setIsOpen] = React.useState(false); // Состояние для отслеживания открытия
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger
+        onMouseEnter={() => setIsOpen(true)} // Открываем меню при наведении
+        onMouseLeave={() => setIsOpen(false)} // Закрываем меню, если курсор уходит
+        className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+      >
+        Hover or Click me
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        onMouseEnter={() => setIsOpen(true)} // Держим меню открытым, если курсор на контенте
+        onMouseLeave={() => setIsOpen(false)} // Закрываем меню, когда курсор уходит с контента
+        className="mt-2 p-2 bg-white rounded-lg shadow-lg"
+      >
+        <DropdownMenuItem className="px-4 py-2">Item 1</DropdownMenuItem>
+        <DropdownMenuItem className="px-4 py-2">Item 2</DropdownMenuItem>
+        <DropdownMenuItem className="px-4 py-2">Item 3</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+
 export {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -200,4 +228,5 @@ export {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
+  HoverableDropdownMenu
 }

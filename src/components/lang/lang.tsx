@@ -29,7 +29,7 @@ export interface ILang{
 
 
 export const en : ILang ={
-  lang:'Eng',
+  lang:'English',
   rus: 'Russian',
   eng: 'English',
   calculate: "Calculator",
@@ -55,12 +55,14 @@ export const en : ILang ={
   apy_value: '300%',
   project_losing_get: 'income',
   usdtortoken: 'RUBT or TIN',
+  wallet: 'Wallet',
+  logout: 'Log out'
 };
 
 export const ru: ILang ={
-  lang:'Рус',
-  rus: 'Русский',
-  eng: 'Английский',
+  lang:'Russian',
+  rus: 'Russian',
+  eng: 'English',
   calculate: "Калькулятор",
   light: 'Светлая',
   dark: 'Темная',
@@ -84,4 +86,6 @@ export const ru: ILang ={
   apy_value: '300%',
   project_losing_get: 'доход в',
   usdtortoken: 'RUBT или TIN',
+  wallet: 'Кошелек',
+  logout: 'Выход'
 };
