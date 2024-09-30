@@ -74,6 +74,7 @@ export default function ChoseItem () {
             progress: undefined,
             theme: localStorage.getItem('vite-ui-theme') as string,
             transition: Bounce,
+            
           });
     };
 
