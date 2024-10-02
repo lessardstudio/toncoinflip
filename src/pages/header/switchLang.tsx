@@ -107,7 +107,8 @@ const items: Locales[] = ['ru', 'en'];
         >
         
         
-        <Item locale={localStorage.getItem('lang') as Locales} spanClass="font-bold-imp"/>
+        <Item locale={locale as Locales}
+        spanClass="font-bold-imp"/>
           {items.map((lang) => {
             // Проверяем, нужно ли отображать элемент
             if (lang !== locale) {

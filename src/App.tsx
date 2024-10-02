@@ -15,8 +15,10 @@ function App() {
   }
   const initialLocale: 'en' | 'ru' = localStorage.getItem('lang') as 'en' | 'ru';
 
+  const normalizedTheme = localStorage.getItem('vite-ui-theme') ?
+  (localStorage.getItem('vite-ui-theme') as any ).toUpperCase() as Theme : "SYSTEM";
   const uiPref = {
-    theme: (localStorage.getItem('vite-ui-theme') as string).toUpperCase() as Theme
+    theme: normalizedTheme
   } as UIPreferences;
 
 

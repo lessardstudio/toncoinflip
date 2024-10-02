@@ -19,9 +19,10 @@ export function DropMenuSwitchTheme() {
   const { translations: T } = useTranslation();
   const { theme, setTheme } = useTheme()
   const [, setOptions] = useTonConnectUI();
+  const normalizedTheme = theme ? theme.toUpperCase() as Theme : "SYSTEM";
   function changeTheme(theme: ThemeType){
       setTheme(theme)
-      setOptions({ uiPreferences: {theme: theme.toUpperCase() as Theme}});
+      setOptions({ uiPreferences: {theme: normalizedTheme}});
   }
 
   function iconTheme(theme: ThemeType){

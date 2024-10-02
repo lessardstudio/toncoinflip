@@ -48,8 +48,12 @@ const Icon: React.FC<{  icon:  React.FC<{isPressed?: boolean}>,
 };
 
 export default function ChoseItem () {
-    const lschose = localStorage.getItem('choseTon') ? localStorage.getItem('choseTon') : 0
-    const [coin, setCoin] =  useState<number>(lschose != null? Number(lschose) : 0); // 0 - ton, 1 - not
+    const lschose = Number(localStorage.getItem('choseTon')) as 0 | 1;
+    console.log(lschose)
+    if (!lschose || !(lschose as (0 | 1)) ) {
+        localStorage.setItem('choseTon', '0')
+    }
+    const [coin, setCoin] =  useState<(0 | 1)>(lschose !== null? lschose : 0); // 0 - ton, 1 - not
     const [timeoutActive, setTimeoutActive] = useState(false); // состояние для отслеживания таймаута
     const [items, setItems] = useState([
         { id: 0, icon: TON, col_back: "#44BDFF", col_fg: "#0098EA" },
@@ -86,7 +90,7 @@ export default function ChoseItem () {
             item.id === id ? { ...item, isPressed: true } : item
         );
         setItems(updatedItems);
-        setCoin(id);
+        setCoin(id as (0|1));
         localStorage.setItem('choseTon', id.toString());
         toast(
             <div className="flex flex row items-center gap-1">
