@@ -172,4 +172,7 @@ body {
   .text-foreground {
     color: hsl(var(--foreground)) !important;
   }
+  .font-bold-imp * {
+    font-weight: 700 !important;
+  }
 }/*# sourceMappingURL=index.css.map */

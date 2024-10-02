@@ -100,7 +100,7 @@ const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, classN
                     func={handleLogout}/>
 
                 </DropdownMenuContent>
-                <Button className="w-max font-bold" variant="ghost"
+                <Button className="w-max font-bold relative top-[-1px]" variant="ghost"
                 ref={triggerRef}
                 onMouseEnter={() => handleMouseToggle(true)}
                 onMouseLeave={() => handleMouseToggle(false)}

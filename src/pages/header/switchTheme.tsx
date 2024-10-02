@@ -117,7 +117,7 @@ const items: ThemeType[] = ['light', 'dark', 'system'];
           })}
           
         </DropdownMenuContent>
-        <Button variant={iconTheme(theme as ThemeType).btn as varianttype}
+        <Button className='w-max font-bold relative top-[-2px]' variant={iconTheme(theme as ThemeType).btn as varianttype}
         ref={triggerRef}
         onMouseEnter={() => handleMouseToggle(true)}
         onMouseLeave={() => handleMouseToggle(false)}>{iconTheme(theme as ThemeType).icon}</Button>

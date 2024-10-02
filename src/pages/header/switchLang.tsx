@@ -83,11 +83,11 @@ export function DropMenuSwitchLang() {
   }
 
 
-const Item: React.FC<{ locale: Locales, className?: string, spanClass?: string }> = ({ locale = 'en' as Locales, className = "", spanClass = ""}) => {
+const Item: React.FC<{ locale: Locales, className?: string, spanClass?: string }> = ({ locale = 'en' as Locales, className = "", spanClass = " "}) => {
     return (
         <DropdownMenuItem onSelect={() => handleTrans(locale)}>
-            <div className={`flex justify-center w-full py-0.5 gap-2 ${className}`}>
-                {iconLang(locale).icon}<span className={`${spanClass}`}>{iconLang(locale).text}</span>
+            <div className={`flex justify-center items-center w-full py-0.5 gap-2 ${className}`}>
+                {iconLang(locale).icon}<span className={`font-['Inter'] ${spanClass}`}>{iconLang(locale).text}</span>
             </div>
         </DropdownMenuItem>
     );
@@ -107,7 +107,7 @@ const items: Locales[] = ['ru', 'en'];
         >
         
         
-        <Item locale={localStorage.getItem('lang') as Locales} spanClass="font-bold"/>
+        <Item locale={localStorage.getItem('lang') as Locales} spanClass="font-bold-imp"/>
           {items.map((lang) => {
             // Проверяем, нужно ли отображать элемент
             if (lang !== locale) {
@@ -122,8 +122,8 @@ const items: Locales[] = ['ru', 'en'];
           onMouseLeave={() => handleMouseToggle(false)}
           >
           {iconLang(locale).icon}
-          <span className="pl-2 font-bold"> {T.lang}</span>
-          </Button>
+          <span className="pl-2 font-['Inter'] font-bold"> {T.lang}</span>
+        </Button>
       </DropdownMenu>
     </div>
   );
