@@ -48,7 +48,7 @@ const Icon: React.FC<{  icon:  React.FC<{isPressed?: boolean}>,
 };
 
 export default function ChoseItem () {
-    const lschose = localStorage.getItem('choseTon')
+    const lschose = localStorage.getItem('choseTon') ? localStorage.getItem('choseTon') : 0
     const [coin, setCoin] =  useState<number>(lschose != null? Number(lschose) : 0); // 0 - ton, 1 - not
     const [timeoutActive, setTimeoutActive] = useState(false); // состояние для отслеживания таймаута
     const [items, setItems] = useState([
