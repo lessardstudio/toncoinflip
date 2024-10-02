@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Bounce, toast } from "react-toastify";
+import {  Slide, toast } from "react-toastify";
 
 import tonSVG from "@/assets/ton_symbol.svg";
 import notSVG from "@/assets/not_symbol.svg";
 import { useTranslation } from "@/components/lang";
+
+import { ShieldX } from 'lucide-react';
 
 
 const translate = 'translate-y-[0.075rem]'
@@ -48,6 +50,7 @@ const Icon: React.FC<{  icon:  React.FC<{isPressed?: boolean}>,
 export default function ChoseItem () {
     const lschose = localStorage.getItem('choseTon')
     const [coin, setCoin] =  useState<number>(lschose != null? Number(lschose) : 0); // 0 - ton, 1 - not
+    const [timeoutActive, setTimeoutActive] = useState(false); // состояние для отслеживания таймаута
     const [items, setItems] = useState([
         { id: 0, icon: TON, col_back: "#44BDFF", col_fg: "#0098EA" },
         { id: 1, icon: NOT, col_back: "#464646", col_fg: "#000000" },
@@ -55,27 +58,56 @@ export default function ChoseItem () {
       const { translations: T } = useTranslation();
 
     const handleIconClick = (id: number) => {
+        if (timeoutActive) return;
+        if (id == Number(localStorage.getItem('choseTon'))){
+            toast(
+            <div className="flex flex row items-center gap-1">
+                <ShieldX className="w-6 h-6 text-[red]" />
+                {T.youChoiceNotifyErr}{id==0?"TON":"NOT"}
+            </div>, {
+            position: 'top-center' ,
+            autoClose: 1000,
+            hideProgressBar: true,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: localStorage.getItem('vite-ui-theme') as string,
+            transition: Slide,
+          });
+            setTimeoutActive(true)
+            setTimeout(() => {
+                setTimeoutActive(false)
+            }, 2000);
+            return;
+        }
         // Обновляем массив объектов, изменяя только нужный элемент
         const updatedItems = items.map(item => 
             item.id === id ? { ...item, isPressed: true } : item
         );
         setItems(updatedItems);
-        setCoin(id); // Ваша функция для изменения coin
+        setCoin(id);
         localStorage.setItem('choseTon', id.toString());
         toast(
             <div className="flex flex row items-center gap-1">
                 <img className="w-6 h-6" src={id==0?tonSVG:notSVG} alt="TON" />
                 {T.youChoiceNotify}{id==0?"TON":"NOT"}
             </div>, {
-            hideProgressBar: false,
+            position: 'top-center' ,
+            autoClose: 1000,
+            hideProgressBar: true,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
             progress: undefined,
             theme: localStorage.getItem('vite-ui-theme') as string,
-            transition: Bounce,
-            
+            transition: Slide,
           });
+        setTimeoutActive(true)
+        setTimeout(() => {
+            setTimeoutActive(false)
+        }, 2000);
+        
     };
 
     return(

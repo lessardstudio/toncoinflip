@@ -57,7 +57,8 @@ export const en : ILang ={
   usdtortoken: 'RUBT or TIN',
   wallet: 'Wallet',
   logout: 'Log out',
-  youChoiceNotify: 'You choice '
+  youChoiceNotify: 'You have choice ',
+  youChoiceNotifyErr: 'You have already chosen ',
 };
 
 export const ru: ILang ={
@@ -89,5 +90,6 @@ export const ru: ILang ={
   usdtortoken: 'RUBT или TIN',
   wallet: 'Кошелек',
   logout: 'Выход',
-  youChoiceNotify: 'Вы успешно выбрали '
+  youChoiceNotify: 'Вы успешно выбрали ',
+  youChoiceNotifyErr: 'Вы уже выбрали ',
 };
