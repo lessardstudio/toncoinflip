@@ -5,7 +5,6 @@ import { ProfileMenu } from "@/components/tonconnect";
 
 export const Header = ()=>{
     
-    
     return(
         <header className="flex flex-row w-full justify-between my-3 bg-">
             <div className="logo flex justify-start w-fit items-center gap-2 select-none cursor-pointer group hover_1 bg-none" onClick={()=>location.href = "/"}>

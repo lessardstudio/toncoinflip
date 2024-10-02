@@ -97,7 +97,7 @@ export default function ChoseItem () {
                 {T.youChoiceNotify}{id==0?"TON":"NOT"}
             </div>, {
             position: 'top-center' ,
-            autoClose: 100000,
+            autoClose: 1000,
             hideProgressBar: true,
             closeOnClick: true,
             pauseOnHover: true,
