@@ -1,5 +1,5 @@
 import { useState } from "react";
-import {  Slide, toast } from "react-toastify";
+import {  Slide, Theme, toast } from "react-toastify";
 
 import tonSVG from "@/assets/ton_symbol.svg";
 import notSVG from "@/assets/not_symbol.svg";
@@ -49,7 +49,6 @@ const Icon: React.FC<{  icon:  React.FC<{isPressed?: boolean}>,
 
 export default function ChoseItem () {
     const lschose = Number(localStorage.getItem('choseTon')) as 0 | 1;
-    console.log(lschose)
     if (!lschose || !(lschose as (0 | 1)) ) {
         localStorage.setItem('choseTon', '0')
     }
@@ -76,7 +75,7 @@ export default function ChoseItem () {
             pauseOnHover: true,
             draggable: true,
             progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string,
+            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
             transition: Slide,
           });
             setTimeoutActive(true)
@@ -98,13 +97,13 @@ export default function ChoseItem () {
                 {T.youChoiceNotify}{id==0?"TON":"NOT"}
             </div>, {
             position: 'top-center' ,
-            autoClose: 1000,
+            autoClose: 100000,
             hideProgressBar: true,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
             progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string,
+            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
             transition: Slide,
           });
         setTimeoutActive(true)
@@ -122,6 +121,7 @@ export default function ChoseItem () {
                 icon={item.icon}
                 className="select-none cursor-pointer" // React использует это для рендера
                 id={item.id}   // Добавляем id для передачи в функцию
+                key={item.id}
                 func={()=> handleIconClick(item.id)}  // Используем id для функции
                 isPressed={coin == item.id ? true : false}
                 col_back={item.col_back}

@@ -29,6 +29,10 @@ body {
     --toastify-font-family: 'Inter' !important;
     --toastify-text-color-light: hsl(var(--foreground)) !important;
     --toastify-color-progress-light: hsl(var(--main-col)) !important;
+    --toastify-color-dark: hsl(var(--main-col-bg)) !important;
+    --toastify-text-color-dark: hsl(var(--foreground)) !important;
+    --toastify-color-progress-dark: hsl(var(--main-col)) !important;
+    
 
 
     --main-col: 201 100% 46%;
@@ -56,9 +60,14 @@ body {
     
   }
   .dark {
+    --toastify-color-light: hsl(var(--main-col-bg)) !important;
+    --toastify-font-family: 'Inter' !important;
+    --toastify-text-color-light: hsl(var(--foreground)) !important;
+    --toastify-color-progress-light: hsl(var(--main-col)) !important;
     --toastify-color-dark: hsl(var(--main-col-bg)) !important;
     --toastify-text-color-dark: hsl(var(--foreground)) !important;
     --toastify-color-progress-dark: hsl(var(--main-col)) !important;
+    
 
     --main-col: 201 100% 46%;
     --main-col-bg: 228 42% 14%;
@@ -81,6 +90,8 @@ body {
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
+
   }
 }
 @layer base {
@@ -106,7 +117,17 @@ body {
       font-weight: 700 !important;
      }
   }
+  
 
+}
+
+.Toastify__close-button{
+  color: hsl(var(--foreground)) !important;
+  opacity: 0.3 !important;
+
+  &:hover,:focus{
+    opacity: 1 !important;
+  }
 }
 
 

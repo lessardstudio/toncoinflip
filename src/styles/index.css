@@ -108,6 +108,9 @@ body {
     --toastify-font-family: "Inter" !important;
     --toastify-text-color-light: hsl(var(--foreground)) !important;
     --toastify-color-progress-light: hsl(var(--main-col)) !important;
+    --toastify-color-dark: hsl(var(--main-col-bg)) !important;
+    --toastify-text-color-dark: hsl(var(--foreground)) !important;
+    --toastify-color-progress-dark: hsl(var(--main-col)) !important;
     --main-col: 201 100% 46%;
     --main-col-bg: 210 33% 95%;
     --background: 210 33% 98%;
@@ -132,6 +135,10 @@ body {
     --radius: 0.5rem;
   }
   .dark {
+    --toastify-color-light: hsl(var(--main-col-bg)) !important;
+    --toastify-font-family: "Inter" !important;
+    --toastify-text-color-light: hsl(var(--foreground)) !important;
+    --toastify-color-progress-light: hsl(var(--main-col)) !important;
     --toastify-color-dark: hsl(var(--main-col-bg)) !important;
     --toastify-text-color-dark: hsl(var(--foreground)) !important;
     --toastify-color-progress-dark: hsl(var(--main-col)) !important;
@@ -175,4 +182,11 @@ body {
   .font-bold-imp * {
     font-weight: 700 !important;
   }
+}
+.Toastify__close-button {
+  color: hsl(var(--foreground)) !important;
+  opacity: 0.3 !important;
+}
+.Toastify__close-button:hover, .Toastify__close-button :focus {
+  opacity: 1 !important;
 }/*# sourceMappingURL=index.css.map */
