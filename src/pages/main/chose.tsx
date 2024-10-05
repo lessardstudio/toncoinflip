@@ -115,7 +115,7 @@ export default function ChoseItem () {
 
     return(
         <div className="flex flex-row justify-center items-center gap-x-6 bg-foreground-6per rounded-[50px] px-10 py-2">
-            <div className="text-right text-foreground text-4xl font-extrabold font-['Inter']">Chose side</div>
+            <div className={`text-right text-foreground ${T.choice_side_class} font-extrabold font-['Inter']`}>{T.choice_side}</div>
             {items.map(item => (
             <Icon
                 icon={item.icon}

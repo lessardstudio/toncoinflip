@@ -59,6 +59,16 @@ export const en : ILang ={
   logout: 'Log out',
   youChoiceNotify: 'You have choice ',
   youChoiceNotifyErr: 'You have already chosen ',
+  slogan: 'Try your luck by tossing a ',
+  slogan_coin: 'coin!',
+  slogan_text_size: '',
+  choice_side: 'Choose a side',
+  choice_side_class: 'text-4xl text-nowrap',
+  bet: 'Bet sum',
+  betchange: 'Bet change to ',
+  beterrchange: 'Bet has been choose',
+  maxbeterr: 'This bet is temporarily unavailable'
+  
 };
 
 export const ru: ILang ={
@@ -92,4 +102,14 @@ export const ru: ILang ={
   logout: 'Выход',
   youChoiceNotify: 'Вы успешно выбрали ',
   youChoiceNotifyErr: 'Вы уже выбрали ',
+  slogan: 'Используй удачу в подбрасывании',
+  slogan_coin: 'монеты!',
+  slogan_text_size: 'rus',
+  choice_side: 'Выбери сторону',
+  choice_side_class: 'text-3xl text-nowrap',
+  bet: 'Ставка',
+  betchange: 'Ставка изменена на ',
+  beterrchange: 'Ставка уже выбрана',
+  maxbeterr: 'Данная ставка временно невозможна'
+  
 };

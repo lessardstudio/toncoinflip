@@ -19,14 +19,24 @@
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
+  max-lines: 3;
+}
+.text-slogan.rus {
+  font-size: 2.425rem;
+  text-wrap: wrap;
+  max-lines: 2;
 }
 .text-slogan.blue {
   color: hsl(var(--main-col));
   font-size: 6rem;
   font-style: normal;
   font-weight: 800;
-  line-height: 4.875rem;
-  letter-spacing: -0.072rem;
+  line-height: 4rem;
+  letter-spacing: 0;
+  text-wrap: wrap;
+}
+.text-slogan.blue.rus {
+  font-size: 5rem;
 }
 
 #root {

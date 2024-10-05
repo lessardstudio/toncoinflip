@@ -22,14 +22,26 @@
     line-height: 3.75rem;
     letter-spacing: -0.036rem;
     user-select: none;
+    max-lines: 3;
+    
+    &.rus{
+        font-size: 2.425rem;
+        text-wrap: wrap;
+        max-lines: 2;
+    }
 
     &.blue{
         color: hsl(var(--main-col));
         font-size: 6rem;
         font-style: normal;
         font-weight: 800;
-        line-height: 4.875rem;
-        letter-spacing: -0.072rem;
+        line-height: 4rem;
+        letter-spacing: 0;
+        text-wrap: wrap;
+
+        &.rus{
+            font-size: 5rem;
+        }
     }
 }
 
