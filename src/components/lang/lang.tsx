@@ -67,7 +67,18 @@ export const en : ILang ={
   bet: 'Bet sum',
   betchange: 'Bet change to ',
   beterrchange: 'Bet has been choose',
-  maxbeterr: 'This bet is temporarily unavailable'
+  maxbeterr: 'This bet is temporarily unavailable',
+  flipBtn: 'Lets flip coin!',
+  historyTitle: 'History game',
+  allgamesbtn: 'All games',
+  canwin: 'You can',
+  winBig: 'win',
+  canwinClass: 'text-[45px] leading-[55px]',
+  winBigClass: 'text-[90px]',
+  x2: 'and x2',
+  betBig: 'bet',
+  x2Class: 'text-[40px] leading-[55px]',
+  betBigClass: 'text-[80px]',
   
 };
 
@@ -110,6 +121,17 @@ export const ru: ILang ={
   bet: 'Ставка',
   betchange: 'Ставка изменена на ',
   beterrchange: 'Ставка уже выбрана',
-  maxbeterr: 'Данная ставка временно невозможна'
+  maxbeterr: 'Данная ставка временно невозможна',
+  flipBtn: 'Подбросить монету!',
+  historyTitle: 'История игр',
+  allgamesbtn: 'Все игры',
+  canwin: 'Ты можешь',
+  winBig: 'выиграть',
+  canwinClass: 'text-[45px] leading-[60px]',
+  winBigClass: 'text-[55px] leading-[20px]',
+  x2: 'и удвоить',
+  betBig: 'ставку',
+  x2Class: 'text-[40px] leading-[60px]',
+  betBigClass: 'text-[55px] leading-[20px]',
   
 };
