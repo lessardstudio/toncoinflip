@@ -1,8 +1,7 @@
-import { useTranslation } from "@/components/lang";
-import { Theme } from "@tonconnect/ui";
-import { ShieldCheck, ShieldX } from "lucide-react";
 import { useState } from "react";
-import { Slide, toast } from "react-toastify";
+import { showMaxBetError, showBetChangeError, showBetChangeSuccess } from '@/components/notify';
+import { useTranslation } from "@/components/lang";
+
 
 
 
@@ -47,7 +46,6 @@ export default function BetBlock(){
     }
     const [Bet, setBet] =  useState<number>(lsbet !== null? lsbet : 0);
     const [timeoutActive, setTimeoutActive] = useState(false);
-    const { translations: T } = useTranslation();
 
 
     const [items, setItems] = useState([
@@ -60,86 +58,48 @@ export default function BetBlock(){
         { id: 6, bet: 4*5**2,},
       ]);
 
-    const handleIconClick = (id: number, bet:number) => {
+      const { translations: T } = useTranslation();
+
+    const handleIconClick = (id: number, bet: number) => {
         if (timeoutActive) return;
-        if (bet >= maxBet()){
-            toast(
-                <div className="flex flex row items-center gap-1">
-                    <ShieldX className="w-6 h-6 text-[red]" />
-                    {T.maxbeterr}
-                </div>, {
-                position: 'top-center' ,
-                autoClose: 1000,
-                hideProgressBar: true,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-                theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
-                transition: Slide,
-              });
-                const updatedItemsBet = items.map(item =>
-                    item.bet >= maxBet() ? { ...item, Disable: true} : item
-                );
-                setItems(updatedItemsBet);
-                setTimeoutActive(true)
-                setTimeout(() => {
-                    setTimeoutActive(false)
-                }, 2000);
-                
-                return;
+
+        if (bet >= maxBet()) {
+            showMaxBetError(T); // Передаём объект переводов
+            const updatedItemsBet = items.map(item =>
+                item.bet >= maxBet() ? { ...item, Disable: true} : item
+            );
+            setItems(updatedItemsBet);
+            setTimeoutActive(true)
+            setTimeout(() => {
+                setTimeoutActive(false)
+            }, 2000);
+            
+            return;
         }
-        else if (bet == Number(localStorage.getItem('bet'))){
-            toast(
-            <div className="flex flex row items-center gap-1">
-                <ShieldX className="w-6 h-6 text-[red]" />
-                {T.beterrchange}
-            </div>, {
-            position: 'top-center' ,
-            autoClose: 1000,
-            hideProgressBar: true,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
-            transition: Slide,
-          });
+
+        else if (bet === Number(localStorage.getItem('bet'))) {
+            showBetChangeError(T); // Передаём объект переводов
             setTimeoutActive(true)
             setTimeout(() => {
                 setTimeoutActive(false)
             }, 2000);
             return;
         }
-        // Обновляем массив объектов, изменяя только нужный элемент
+
         const updatedItems = items.map(item =>
             item.id === id ? { ...item, isPressed: true, Disable: item.bet >= maxBet()} : {...item, Disable: item.bet >= maxBet()}
         );
         setItems(updatedItems);
         setBet(bet as number);
         localStorage.setItem('bet', bet.toString());
-        toast(
-            <div className="flex flex row items-center gap-1">
-                <ShieldCheck className="w-6 h-6 text-[green]" />
-                {T.betchange}{bet} TON
-            </div>, {
-            position: 'top-center' ,
-            autoClose: 1000,
-            hideProgressBar: true,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
-            transition: Slide,
-          });
+        showBetChangeSuccess(T, bet); // Передаём объект переводов и ставку
         setTimeoutActive(true)
         setTimeout(() => {
             setTimeoutActive(false)
         }, 2000);
-        
-    };
 
+
+    };
 
 
 

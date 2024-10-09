@@ -1,11 +1,8 @@
 import { useState } from "react";
-import {  Slide, Theme, toast } from "react-toastify";
 
-import tonSVG from "@/assets/ton_symbol.svg";
-import notSVG from "@/assets/not_symbol.svg";
 import { useTranslation } from "@/components/lang";
 
-import { ShieldX } from 'lucide-react';
+import { showChoiceErrorNotification, showCustomChoiceNotification } from "@/components/notify";
 
 
 const translate = 'translate-y-[0.075rem]'
@@ -63,21 +60,7 @@ export default function ChoseItem () {
     const handleIconClick = (id: number) => {
         if (timeoutActive) return;
         if (id == Number(localStorage.getItem('choseTon'))){
-            toast(
-            <div className="flex flex row items-center gap-1">
-                <ShieldX className="w-6 h-6 text-[red]" />
-                {T.youChoiceNotifyErr}{id==0?"TON":"NOT"}
-            </div>, {
-            position: 'top-center' ,
-            autoClose: 1000,
-            hideProgressBar: true,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
-            transition: Slide,
-          });
+            showChoiceErrorNotification(id, T);
             setTimeoutActive(true)
             setTimeout(() => {
                 setTimeoutActive(false)
@@ -91,21 +74,7 @@ export default function ChoseItem () {
         setItems(updatedItems);
         setCoin(id as (0|1));
         localStorage.setItem('choseTon', id.toString());
-        toast(
-            <div className="flex flex row items-center gap-1">
-                <img className="w-6 h-6" src={id==0?tonSVG:notSVG} alt="TON" />
-                {T.youChoiceNotify}{id==0?"TON":"NOT"}
-            </div>, {
-            position: 'top-center' ,
-            autoClose: 1000,
-            hideProgressBar: true,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: localStorage.getItem('vite-ui-theme') as string == "system"? "colored": localStorage.getItem('vite-ui-theme') as Theme,
-            transition: Slide,
-          });
+        showCustomChoiceNotification(id, T);
         setTimeoutActive(true)
         setTimeout(() => {
             setTimeoutActive(false)
