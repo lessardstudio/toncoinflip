@@ -95,3 +95,17 @@
   width: min-content !important;
   min-width: none;
 }
+
+
+/* Пример медиазапросов для мобильных устройств */
+@media (max-width: 768px) {
+    .dropdown-menu-content {
+      width: 100%; /* Растянуть меню на всю ширину экрана */
+      max-width: none;
+    }
+  
+    .dropdown-menu-item {
+      padding: 12px; /* Увеличить отступы для удобного касания */
+    }
+  }
+  

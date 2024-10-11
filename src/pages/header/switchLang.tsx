@@ -15,11 +15,18 @@ export function DropMenuSwitchLang() {
   const { locale, setLocale } = useTranslation();
   const [, setOptions] = useTonConnectUI();
   const { translations: T } = useTranslation();
+  const isMobile = window.innerWidth <= 768; // Проверка, мобильное ли устройство
 
   const handleTrans = (locale: 'en' | 'ru') => {
     setLocale(locale);
     setOptions({ language: locale });
     localStorage.setItem('lang', locale);
+  };
+
+  const handleTouchToggle = (isOpen: boolean) => {
+    if (!isMobile) return;
+    // console.log('!', isOpen)
+    setIsOpen(isOpen);
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -29,6 +36,7 @@ export function DropMenuSwitchLang() {
   const [timeoutId, setTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   
   const handleMouseToggle = (isEntering:boolean) => {
+    if (isMobile) return;
     if (isEntering) {
       setIsOpen(true); // Открываем меню
       if (timeoutId) {
@@ -46,6 +54,7 @@ export function DropMenuSwitchLang() {
   };
   
   const handleMenuMouseEnter = () => {
+    if (isMobile) return;
     isMouseOverMenu.current = true; // Устанавливаем флаг при наведении на меню
     if (timeoutId) {
       clearTimeout(timeoutId); // Очищаем таймаут, чтобы меню не закрылось
@@ -53,10 +62,12 @@ export function DropMenuSwitchLang() {
   };
   
   const handleMenuMouseLeave = () => {
+    if(isMobile) return;
     isMouseOverMenu.current = false; // Сбрасываем флаг при уходе с меню
     const id = setTimeout(() => {
       if (!isMouseOverMenu.current) {
         setIsOpen(false); // Закрываем меню при уходе с него
+        console.log(isMobile);
       }
     }, 100); // Устанавливаем задержку в 300 мс
     setTimeoutId(id); // Сохраняем идентификатор таймаута
@@ -101,9 +112,10 @@ const items: Locales[] = ['ru', 'en'];
           
         <DropdownMenuContent
           ref={menuRef}
-          className={`w-max h-max`}
+          className={`w-max h-max z-50`}
           onMouseEnter={handleMenuMouseEnter}
           onMouseLeave={handleMenuMouseLeave}
+          onClick={() => isMobile && handleTouchToggle(!isOpen)}
         >
         
         
@@ -119,8 +131,9 @@ const items: Locales[] = ['ru', 'en'];
         </DropdownMenuContent>
         <Button className="w-max font-bold" variant="ghost"
           ref={triggerRef}
-          onMouseEnter={() => handleMouseToggle(true)}
-          onMouseLeave={() => handleMouseToggle(false)}
+          onMouseEnter={() => !isMobile && handleMouseToggle(true)}
+          onMouseLeave={() => !isMobile && handleMouseToggle(false)}
+          onClick={() => isMobile && handleTouchToggle(!isOpen)}
           >
           {iconLang(locale).icon}
           <span className="pl-2 font-['Inter'] font-bold"> {T.lang}</span>

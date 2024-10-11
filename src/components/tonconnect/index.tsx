@@ -66,6 +66,10 @@ export const WalletObj = () => {
         setTimeoutId(id); // Сохраняем идентификатор таймаута
       };
 
+      const handleTouchToggle = (isOpen: boolean) => {
+        setIsOpen(isOpen); // Для открытия/закрытия меню на касание
+        };
+
 
 const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, className?: string }> = ({ icon, obj, func = () => {}, className = "" }) => {
     return (
@@ -90,20 +94,24 @@ const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, classN
                 onMouseLeave={handleMenuMouseLeave}
                 >
                     <Item icon={<Wallet className="h-6 w-6" />}
-                        obj={T.wallet} className={"font-bold justify-center"}/>
+                        obj={T.wallet}
+                        className={"font-bold justify-center"}/>
 
                     <Item icon={<Flag className="h-4 w-4"/>}
-                        obj={truncateStart(wallet.account.address)} className={"font-normal justify-start"}/>
+                        obj={truncateStart(wallet.account.address)}
+                        className={"font-normal justify-start"}/>
 
                     <Item icon={<LogOut className="h-4 w-4"/>}
                         obj={T.logout} className={"font-medium justify-start"}
-                    func={handleLogout}/>
+                        func={handleLogout}/>
 
                 </DropdownMenuContent>
                 <Button className="w-max font-bold relative top-[-1px]" variant="ghost"
                 ref={triggerRef}
                 onMouseEnter={() => handleMouseToggle(true)}
                 onMouseLeave={() => handleMouseToggle(false)}
+                onTouchStart={() => handleTouchToggle(true)}
+                onTouchEnd={() => handleTouchToggle(false)}
                 >
                     <div className="flex mt-0.5 items-center">
                         <Wallet className="h-6 w-6 mr-2"/>{T.wallet}
