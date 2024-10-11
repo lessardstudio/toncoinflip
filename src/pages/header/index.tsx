@@ -12,7 +12,7 @@ export const Header = ()=>{
                 <h1 className="whitespace-nowrap font-bold">COINFLIP</h1>
             </div>
             <div className="middle"></div>
-            <div className="flex flex-row-reverse justify-end items-center gap-x-4 md:flex-row md:flex-wrap md:gap-x-2">
+            <div className="flex flex-row-reverse justify-end items-center gap-x-2 md:flex-row md:flex-wrap md:gap-x-2">
                 <ProfileMenu/>
                 <DropMenuSwitchLang/>
                 <DropMenuSwitchTheme/>

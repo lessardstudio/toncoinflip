@@ -88,11 +88,11 @@ const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, classN
         </DropdownMenuItem>
     );
 };
-const ItemDiv: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, className?: string }> = ({ icon, obj, func = () => {}, className = "" }) => {
+const ItemDiv: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, className?: string , isMain?: boolean }> = ({ icon, obj, func = () => {}, className = "", isMain=false }) => {
     return (
     <DrawerClose>
-        <Button>
-            <div onClick={func} className={`flex justify-start items-center w-full py-0.25 gap-2 w-full ${className}`}>
+        <Button className={`${ !isMain && 'bg-foreground-6per w-full my-1'}`} onClick={func} variant={'ghost'}>
+            <div className={`flex justify-start items-center w-full py-0.25 gap-2 w-full ${className}`}>
                 {icon}<span className="">{obj}</span>
             </div>
         </Button>
@@ -104,7 +104,7 @@ const ItemDiv: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, cla
 if (isMobile) return(
     wallet && (<Drawer>
       <DrawerTrigger>
-        <Button>
+        <Button variant={'ghost'}>
             <div className={`flex justify-start items-center w-full py-0.25 gap-2 w-full font-bold justify-center`}>
                 {<Wallet className="h-6 w-6" />}<span className="">{T.wallet}</span>
             </div>
@@ -112,19 +112,20 @@ if (isMobile) return(
       </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader>
-          <DrawerTitle>{T.wallet}</DrawerTitle>
+          <DrawerTitle>
+            <div className={`flex justify-start items-center w-full py-0.25 gap-2 w-full font-bold justify-center`}>
+                {<Wallet className="h-6 w-6" />}<span className="">{T.wallet}</span>
+            </div>
+          </DrawerTitle>
           <DrawerDescription></DrawerDescription>
         </DrawerHeader>
-        {/* <ItemDiv icon={<Wallet className="h-6 w-6" />}
-            obj={T.wallet}
-            className={"font-bold justify-center"}/> */}
 
         <ItemDiv icon={<Flag className="h-4 w-4"/>}
             obj={truncateStart(wallet.account.address)}
-            className={"font-normal justify-start"}/>
+            className={"font-normal justify-center items-center"}/>
 
         <ItemDiv icon={<LogOut className="h-4 w-4"/>}
-            obj={T.logout} className={"font-medium justify-start"}
+            obj={T.logout} className={"font-medium justify-center items-center"}
             func={handleLogout}/>
         <DrawerFooter>
         </DrawerFooter>

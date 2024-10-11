@@ -130,7 +130,7 @@ const items: Locales[] = ['ru', 'en'];
           <DrawerDescription></DrawerDescription>
         </DrawerHeader>
         <DrawerClose>
-          <Button onClick={() => handleTrans(locale)}>
+          <Button className={`${'bg-foreground-6per w-full my-1'}`} onClick={() => handleTrans(locale)} variant={'ghost'}>
             <div className={`flex justify-center items-center w-full py-0.5 gap-2 `}>
                   {iconLang(locale).icon}<span className={`font-['Inter']`}>{iconLang(locale).text}</span>
               </div>
@@ -141,7 +141,7 @@ const items: Locales[] = ['ru', 'en'];
             if (lang !== locale) {
               return (
                 <DrawerClose>
-                <Button onClick={() => handleTrans(lang)}>
+                <Button className={`${'bg-foreground-6per w-full my-1'}`} onClick={() => handleTrans(lang)} variant={'ghost'}>
                   <div className={`flex justify-center items-center w-full py-0.5 gap-2 `}>
                         {iconLang(lang).icon}<span className={`font-['Inter']`}>{iconLang(lang).text}</span>
                   </div>

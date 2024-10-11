@@ -18,7 +18,7 @@ export default function MainPage() {
         <>
         <div className="flex flex-row justify-evenly gap-x-6 gap-y-10 flex-wrap xl:flex-nowrap">
 
-            <div className="flex flex-col" style={{width: 356, textAlign: 'right'}}>
+            <div className="hidden sm:flex flex-col" style={{width: 356, textAlign: 'right'}}>
                 <div className={`text-slogan text-foreground ${T.slogan_text_size}`} >
                     {T.slogan}
                 </div>

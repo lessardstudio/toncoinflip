@@ -111,7 +111,7 @@ export function DropMenuSwitchTheme() {
   };
   const ItemDiv: React.FC<{ theme: ThemeType, isMain?: boolean }> = ({ theme = 'system' as ThemeType, isMain=false }) => {
     return (
-        <Button onClick={() => changeTheme(theme as ThemeType)}>
+        <Button className={`${ !isMain && 'bg-foreground-6per w-full my-1'}`} onClick={() => changeTheme(theme as ThemeType)} variant={'ghost'}>
           <div className='flex py-0.5 px-0.5'>
             {iconTheme(theme as ThemeType).icon}
             {!isMain && iconTheme(theme as ThemeType).label}
