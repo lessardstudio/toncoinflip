@@ -79,7 +79,8 @@ export const en : ILang ={
   betBig: 'bet',
   x2Class: 'text-[40px] leading-[55px]',
   betBigClass: 'text-[80px]',
-  
+  choselang: 'Chose language',
+  themechose: 'Chose theme'
 };
 
 export const ru: ILang ={
@@ -133,5 +134,6 @@ export const ru: ILang ={
   betBig: 'ставку',
   x2Class: 'text-[40px] leading-[60px]',
   betBigClass: 'text-[55px] leading-[20px]',
-  
+  choselang: 'Выбери язык',
+  themechose: 'Выбери тему'
 };

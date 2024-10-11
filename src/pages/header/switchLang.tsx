@@ -6,6 +6,21 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer"
+
+
+
+
+
 import { Label } from "@/components/ui/label";
 import { Locales, useTonConnectUI } from "@tonconnect/ui-react";
 import { useTranslation } from "@/components/lang";
@@ -23,11 +38,6 @@ export function DropMenuSwitchLang() {
     localStorage.setItem('lang', locale);
   };
 
-  const handleTouchToggle = (isOpen: boolean) => {
-    if (!isMobile) return;
-    // console.log('!', isOpen)
-    setIsOpen(isOpen);
-  };
 
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null); // Для меню
@@ -105,17 +115,59 @@ const Item: React.FC<{ locale: Locales, className?: string, spanClass?: string }
 };
 const items: Locales[] = ['ru', 'en'];
 
+    if (isMobile) return(
+    <Drawer>
+      <DrawerTrigger>
+            <Button className="w-max font-bold" variant="ghost"
+                ref={triggerRef}>
+                {iconLang(locale).icon}
+                <span className="pl-2 font-['Inter'] font-bold"> {T.lang}</span>
+            </Button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{T.choselang}</DrawerTitle>
+          <DrawerDescription></DrawerDescription>
+        </DrawerHeader>
+        <DrawerClose>
+          <Button onClick={() => handleTrans(locale)}>
+            <div className={`flex justify-center items-center w-full py-0.5 gap-2 `}>
+                  {iconLang(locale).icon}<span className={`font-['Inter']`}>{iconLang(locale).text}</span>
+              </div>
+          </Button>
+        </DrawerClose>
+          {items.map((lang) => {
+            // Проверяем, нужно ли отображать элемент
+            if (lang !== locale) {
+              return (
+                <DrawerClose>
+                <Button onClick={() => handleTrans(lang)}>
+                  <div className={`flex justify-center items-center w-full py-0.5 gap-2 `}>
+                        {iconLang(lang).icon}<span className={`font-['Inter']`}>{iconLang(lang).text}</span>
+                  </div>
+                </Button>
+            </DrawerClose>
+              );
+            }
+            return null; // Возвращаем null, если элемент не должен отображаться
+          })}
+        <DrawerFooter>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+    );
+
+
+
   return (
     <div className="flex flex-col items-center">
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
         <DropdownMenuTrigger/>
-          
         <DropdownMenuContent
           ref={menuRef}
-          className={`w-max h-max z-50`}
+          className={`w-max h-max z-10 ${isMobile && 'hidden'}`}
           onMouseEnter={handleMenuMouseEnter}
           onMouseLeave={handleMenuMouseLeave}
-          onClick={() => isMobile && handleTouchToggle(!isOpen)}
         >
         
         
@@ -131,9 +183,8 @@ const items: Locales[] = ['ru', 'en'];
         </DropdownMenuContent>
         <Button className="w-max font-bold" variant="ghost"
           ref={triggerRef}
-          onMouseEnter={() => !isMobile && handleMouseToggle(true)}
-          onMouseLeave={() => !isMobile && handleMouseToggle(false)}
-          onClick={() => isMobile && handleTouchToggle(!isOpen)}
+          onMouseEnter={() => handleMouseToggle(true)}
+          onMouseLeave={() => handleMouseToggle(false)}
           >
           {iconLang(locale).icon}
           <span className="pl-2 font-['Inter'] font-bold"> {T.lang}</span>

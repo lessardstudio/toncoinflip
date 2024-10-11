@@ -1,5 +1,15 @@
 import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+    Drawer,
+    DrawerClose,
+    DrawerContent,
+    DrawerDescription,
+    DrawerFooter,
+    DrawerHeader,
+    DrawerTitle,
+    DrawerTrigger,
+  } from "@/components/ui/drawer"
 import { Button } from "../ui/button";
 import { useTranslation } from "../lang";
 import { Wallet, Flag, LogOut } from 'lucide-react';
@@ -20,6 +30,7 @@ export function ProfileMenu() {
 export const WalletObj = () => {
     const wallet = useTonWallet();
     const tonUi = useTonConnectUI(); // Используем хук для TonConnect UI
+    const isMobile = window.innerWidth <= 768; // Проверка, мобильное ли устройство
 
     const handleLogout = () => {
         if (tonUi) {
@@ -66,9 +77,6 @@ export const WalletObj = () => {
         setTimeoutId(id); // Сохраняем идентификатор таймаута
       };
 
-      const handleTouchToggle = (isOpen: boolean) => {
-        setIsOpen(isOpen); // Для открытия/закрытия меню на касание
-        };
 
 
 const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, className?: string }> = ({ icon, obj, func = () => {}, className = "" }) => {
@@ -80,6 +88,49 @@ const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, classN
         </DropdownMenuItem>
     );
 };
+const ItemDiv: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, className?: string }> = ({ icon, obj, func = () => {}, className = "" }) => {
+    return (
+    <DrawerClose>
+        <Button>
+            <div onClick={func} className={`flex justify-start items-center w-full py-0.25 gap-2 w-full ${className}`}>
+                {icon}<span className="">{obj}</span>
+            </div>
+        </Button>
+    </DrawerClose>
+    );
+};
+
+
+if (isMobile) return(
+    wallet && (<Drawer>
+      <DrawerTrigger>
+        <Button>
+            <div className={`flex justify-start items-center w-full py-0.25 gap-2 w-full font-bold justify-center`}>
+                {<Wallet className="h-6 w-6" />}<span className="">{T.wallet}</span>
+            </div>
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{T.wallet}</DrawerTitle>
+          <DrawerDescription></DrawerDescription>
+        </DrawerHeader>
+        {/* <ItemDiv icon={<Wallet className="h-6 w-6" />}
+            obj={T.wallet}
+            className={"font-bold justify-center"}/> */}
+
+        <ItemDiv icon={<Flag className="h-4 w-4"/>}
+            obj={truncateStart(wallet.account.address)}
+            className={"font-normal justify-start"}/>
+
+        <ItemDiv icon={<LogOut className="h-4 w-4"/>}
+            obj={T.logout} className={"font-medium justify-start"}
+            func={handleLogout}/>
+        <DrawerFooter>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>)
+    );
     
 
     return (
@@ -110,8 +161,6 @@ const Item: React.FC<{ icon: JSX.Element, obj: string, func?: () => void, classN
                 ref={triggerRef}
                 onMouseEnter={() => handleMouseToggle(true)}
                 onMouseLeave={() => handleMouseToggle(false)}
-                onTouchStart={() => handleTouchToggle(true)}
-                onTouchEnd={() => handleTouchToggle(false)}
                 >
                     <div className="flex mt-0.5 items-center">
                         <Wallet className="h-6 w-6 mr-2"/>{T.wallet}

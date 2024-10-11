@@ -9,6 +9,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer"
+
 import { Label } from '@/components/ui/label';
 import { Theme, useTonConnectUI } from '@tonconnect/ui-react';
 import { ThemeType, useTheme } from '@/components/theme';
@@ -20,6 +31,7 @@ export function DropMenuSwitchTheme() {
   const { theme, setTheme } = useTheme()
   const [, setOptions] = useTonConnectUI();
   const normalizedTheme = theme ? theme.toUpperCase() as Theme : "SYSTEM";
+  const isMobile = window.innerWidth <= 768; // Проверка, мобильное ли устройство
   function changeTheme(theme: ThemeType){
       setTheme(theme)
       setOptions({ uiPreferences: {theme: normalizedTheme}});
@@ -96,8 +108,43 @@ export function DropMenuSwitchTheme() {
           </div>
         </DropdownMenuItem>
     );
-};
+  };
+  const ItemDiv: React.FC<{ theme: ThemeType }> = ({ theme = 'system' as ThemeType }) => {
+    return (
+        <Button onClick={() => changeTheme(theme as ThemeType)}>
+          <div className='flex py-0.5 px-0.5'>
+            {iconTheme(theme as ThemeType).icon}
+            {iconTheme(theme as ThemeType).label}
+          </div>
+        </Button>
+    );
+  };
 const items: ThemeType[] = ['light', 'dark', 'system'];
+
+
+if (isMobile) return(
+  <Drawer>
+    <DrawerTrigger>
+      <ItemDiv theme={theme as ThemeType}/>
+    </DrawerTrigger>
+    <DrawerContent>
+      <DrawerHeader>
+        <DrawerTitle>{T.themechose}</DrawerTitle>
+        <DrawerDescription></DrawerDescription>
+      </DrawerHeader>
+      <ItemDiv theme={theme as ThemeType}/>
+        {items.map((w) => {
+          // Проверяем, нужно ли отображать элемент
+          if (w !== theme) {
+            return <DrawerClose><ItemDiv key={w} theme={w} /></DrawerClose>;
+          }
+          return null; // Возвращаем null, если элемент не должен отображаться
+        })}
+      <DrawerFooter>
+      </DrawerFooter>
+    </DrawerContent>
+  </Drawer>
+  );
 
   return (
     <div className="flex flex-col items-center">
