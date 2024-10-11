@@ -109,12 +109,12 @@ export function DropMenuSwitchTheme() {
         </DropdownMenuItem>
     );
   };
-  const ItemDiv: React.FC<{ theme: ThemeType }> = ({ theme = 'system' as ThemeType }) => {
+  const ItemDiv: React.FC<{ theme: ThemeType, isMain?: boolean }> = ({ theme = 'system' as ThemeType, isMain=false }) => {
     return (
         <Button onClick={() => changeTheme(theme as ThemeType)}>
           <div className='flex py-0.5 px-0.5'>
             {iconTheme(theme as ThemeType).icon}
-            {iconTheme(theme as ThemeType).label}
+            {!isMain && iconTheme(theme as ThemeType).label}
           </div>
         </Button>
     );
@@ -125,7 +125,7 @@ const items: ThemeType[] = ['light', 'dark', 'system'];
 if (isMobile) return(
   <Drawer>
     <DrawerTrigger>
-      <ItemDiv theme={theme as ThemeType}/>
+      <ItemDiv isMain={true} theme={theme as ThemeType}/>
     </DrawerTrigger>
     <DrawerContent>
       <DrawerHeader>
