@@ -64,7 +64,7 @@ export default function ChoseItem () {
             setTimeoutActive(true)
             setTimeout(() => {
                 setTimeoutActive(false)
-            }, 2000);
+            }, 500);
             return;
         }
         // Обновляем массив объектов, изменяя только нужный элемент
@@ -78,7 +78,7 @@ export default function ChoseItem () {
         setTimeoutActive(true)
         setTimeout(() => {
             setTimeoutActive(false)
-        }, 2000);
+        }, 500);
         
     };
 

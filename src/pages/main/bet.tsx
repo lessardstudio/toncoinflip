@@ -72,7 +72,7 @@ export default function BetBlock(){
             setTimeoutActive(true)
             setTimeout(() => {
                 setTimeoutActive(false)
-            }, 2000);
+            }, 500);
             
             return;
         }
@@ -82,7 +82,7 @@ export default function BetBlock(){
             setTimeoutActive(true)
             setTimeout(() => {
                 setTimeoutActive(false)
-            }, 2000);
+            }, 500);
             return;
         }
 
@@ -96,7 +96,7 @@ export default function BetBlock(){
         setTimeoutActive(true)
         setTimeout(() => {
             setTimeoutActive(false)
-        }, 2000);
+        }, 500);
 
 
     };
