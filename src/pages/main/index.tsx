@@ -16,7 +16,7 @@ export default function MainPage() {
     const { translations: T } = useTranslation();
     return (
         <>
-        <div className="flex flex-row justify-evenly gap-x-6">
+        <div className="flex flex-row justify-evenly gap-x-6 gap-y-10 flex-wrap xl:flex-nowrap">
 
             <div className="flex flex-col" style={{width: 356, textAlign: 'right'}}>
                 <div className={`text-slogan text-foreground ${T.slogan_text_size}`} >
@@ -30,7 +30,9 @@ export default function MainPage() {
             <ChoseItem/>
 
 
-            <div className="flex flex-col justify-arround items-center text-[hsl(var(--foreground))] bg-foreground-6per px-8 py-8 rounded-[50px] font-['Inter'] font-[600] text-xl min-w-[200px]">
+            <div className="flex flex-col justify-arround items-center text-[hsl(var(--foreground))]
+                            bg-foreground-6per px-8 py-8 rounded-[50px] font-['Inter'] font-[600] text-xl min-w-[200px]">
+
                 <div className="choseCount flex-nowrap flex flex-col justify-between items-start h-full">
                     <div className="max-w-[300px] grid grid-cols-4 grid-rows-2 grid-flow-row gap-1">
                         <div className="text-sm text-center pl-2 text-[hsla(var(--main-col)/0.5)] leading-8">{T.bet}:</div>
@@ -50,7 +52,7 @@ export default function MainPage() {
 
 
         </div>
-        <div className="flex flex-row justify-center items-center gap-2">
+        <div className="flex flex-col justify-center items-center gap-2 flex-wrap sm:flex-row lg:flex-nowrap">
             <img className="relative top-2" src={GemStone} alt="GemStone" width="100" height="100" />
             <div className={`px-2 ${T.canwinClass} max-w-[300px] max-h-[160px] font-[600] text-wrap text-right select-none`}>
                 {T.canwin}<div className={T.winBigClass}>{T.winBig}</div>

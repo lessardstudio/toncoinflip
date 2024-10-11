@@ -83,20 +83,23 @@ export default function ChoseItem () {
     };
 
     return(
-        <div className="flex flex-row justify-center items-center gap-x-6 bg-foreground-6per rounded-[50px] px-10 py-2">
+        <div className="flex flex-col justify-center items-center gap-x-6 gap-y-4 bg-foreground-6per
+                        rounded-[50px] px-10 py-4 md:flex-row md:pt-2">
             <div className={`text-right text-foreground ${T.choice_side_class} font-extrabold font-['Inter']`}>{T.choice_side}</div>
-            {items.map(item => (
-            <Icon
-                icon={item.icon}
-                className="select-none cursor-pointer" // React использует это для рендера
-                id={item.id}   // Добавляем id для передачи в функцию
-                key={item.id}
-                func={()=> handleIconClick(item.id)}  // Используем id для функции
-                isPressed={coin == item.id ? true : false}
-                col_back={item.col_back}
-                col_fg={item.col_fg}
-            />
-            ))}
+            <div className="flex flex-row gap-x-6">
+                {items.map(item => (
+                <Icon
+                    icon={item.icon}
+                    className="select-none cursor-pointer" // React использует это для рендера
+                    id={item.id}   // Добавляем id для передачи в функцию
+                    key={item.id}
+                    func={()=> handleIconClick(item.id)}  // Используем id для функции
+                    isPressed={coin == item.id ? true : false}
+                    col_back={item.col_back}
+                    col_fg={item.col_fg}
+                />
+                ))}
+            </div>
             
         </div>
         

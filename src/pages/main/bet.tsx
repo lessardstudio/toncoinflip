@@ -92,7 +92,7 @@ export default function BetBlock(){
         setItems(updatedItems);
         setBet(bet as number);
         localStorage.setItem('bet', bet.toString());
-        showBetChangeSuccess(T, bet); // Передаём объект переводов и ставку
+        showBetChangeSuccess(T, bet);
         setTimeoutActive(true)
         setTimeout(() => {
             setTimeoutActive(false)
