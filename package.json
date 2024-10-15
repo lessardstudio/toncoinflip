@@ -34,6 +34,9 @@
     "react-toastify": "^10.0.5",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
+    "ton": "^13.9.0",
+    "tonconnect-ui-react": "^0.0.1",
+    "tonweb": "^0.0.66",
     "vaul": "^1.0.0"
   },
   "devDependencies": {
