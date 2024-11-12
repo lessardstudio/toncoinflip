@@ -26,4 +26,8 @@
 //     // }
 //   };
 
-// export default sendBetTransaction;
+const sendBetTransaction = async () => {
+  //pass
+}
+
+export default sendBetTransaction;
