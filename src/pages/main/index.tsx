@@ -6,6 +6,8 @@ import { ItemsGames } from "./itemgames";
 import MoneyBag from '/tg_money_bag.webp'
 import MoneyWings from '/tg_money_with_wings.webp'
 import GemStone from '/tg_gem_stone.webp'
+import sendBetTransaction from "@/components/tonweb/sendBetTransaction";
+
 
 
 export default function MainPage() {
@@ -14,6 +16,13 @@ export default function MainPage() {
     
 
     const { translations: T } = useTranslation();
+    const handleBet = async () => {
+        const choseTon = localStorage.getItem('choseTon');
+        const Bet = localStorage.getItem('bet');
+        sendBetTransaction(Number(choseTon), Number(Bet));
+    };
+
+
     return (
         <>
         <div className="flex flex-row justify-evenly gap-x-6 gap-y-10 flex-wrap xl:flex-nowrap">
@@ -45,7 +54,8 @@ export default function MainPage() {
                     hover:text-[hsla(var(--main-col-bg)/0.9)]
                     hover:bg-[hsla(var(--main-col)/0.6)]
                     transition-colors ease-in-out duration-300
-                    select-none cursor-pointer">{T.flipBtn}</div>
+                    select-none cursor-pointer"
+                    onClick={handleBet}>{T.flipBtn}</div>
                 </div>
             </div>
 

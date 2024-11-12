@@ -80,7 +80,8 @@ export const en : ILang ={
   x2Class: 'text-[40px] leading-[55px]',
   betBigClass: 'text-[80px]',
   choselang: 'Chose language',
-  themechose: 'Chose theme'
+  themechose: 'Chose theme',
+  connectWallet: 'Connect TON wallet',
 };
 
 export const ru: ILang ={
@@ -135,5 +136,6 @@ export const ru: ILang ={
   x2Class: 'text-[40px] leading-[60px]',
   betBigClass: 'text-[55px] leading-[20px]',
   choselang: 'Выбери язык',
-  themechose: 'Выбери тему'
+  themechose: 'Выбери тему',
+  connectWallet: 'Подключить кошелек TON',
 };

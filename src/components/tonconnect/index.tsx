@@ -16,11 +16,22 @@ import { Wallet, Flag, LogOut } from 'lucide-react';
 import { useRef, useState } from "react";
 
 export function ProfileMenu() {
+  const [tonConnectUI] = useTonConnectUI();
     const wallet = useTonWallet(); // Проверяем состояние подключения
+    const { translations: T } = useTranslation();
 
     if (!wallet) { // Если кошелек подключен
         return (
-            <TonConnectButton className="h-min w-full" />
+            // <TonConnectButton className="h-min w-full" />
+            <Button className="font-bold relative top-[-1px] bg-[var(--main-col)]" variant="tonconnect"
+            onClick={() => tonConnectUI.openModal()}>
+                  <div className="flex mt-0.5 items-center justify-center">
+                      <Wallet className="h-6 w-6 mr-2"/>
+                      <div className="text-wrap">
+                        {T.connectWallet}
+                      </div>
+                  </div>
+            </Button>
         );
     } else { // Если кошелек не подключен
         return (<WalletObj />);

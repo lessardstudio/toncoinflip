@@ -58,7 +58,7 @@ export default function BetBlock(){
         { id: 6, bet: 4*5**2,},
       ]);
 
-      const { translations: T } = useTranslation();
+    const { translations: T } = useTranslation();
 
     const handleIconClick = (id: number, bet: number) => {
         if (timeoutActive) return;
@@ -102,6 +102,10 @@ export default function BetBlock(){
     };
 
 
+
+
+
+    
 
 
 

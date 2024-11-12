@@ -60,11 +60,12 @@
     transition: 
         background 0.2s ease-in-out, 
         color 0.2s ease-in-out;
+
     
 }
 
 
-.hover_1:hover {
+.hover_1:hover{
     background: 
         hsla(var(--main-col) /4%) !important; 
     color: hsl(var(--main-col));
@@ -72,6 +73,7 @@
     &.bg-none{
         background: transparent !important;
     }
+
 }
 
 
