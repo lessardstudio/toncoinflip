@@ -26,7 +26,7 @@
 //     // }
 //   };
 
-const sendBetTransaction = async () => {
+const sendBetTransaction = async (_bet: number, _amount: number) => {
   //pass
 }
 
