@@ -1,4 +1,4 @@
-import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
+import {  useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
     Drawer,
