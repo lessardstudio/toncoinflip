@@ -46,99 +46,114 @@ class TonWebInstance {
     }
 
     private async initializeTonWeb(): Promise<void> {
+        // Проверяем, что инициализация еще не выполнена
+        if (this.tonweb !== null && this.TonWebLib !== null) {
+            console.log('TonWeb уже инициализирован, пропускаем повторную инициализацию');
+            return;
+        }
+        
+        // Получаем значения из конфигурации
+        this.isTestnet = import.meta.env.VITE_IS_TESTNET === 'true';
+        this.apiKey = import.meta.env.VITE_TONCENTER_API_KEY || '';
+        
+        console.log(`Инициализация TonWeb для ${this.isTestnet ? 'testnet' : 'mainnet'}`);
+        
         try {
-            console.log('Инициализация TonWeb...');
-            
-            // Проверяем, доступен ли TonWeb в глобальном контексте window
-            if (window.TonWeb) {
-                console.log('Используем TonWeb из глобального объекта window');
-                this.TonWebLib = window.TonWeb;
+            // Пробуем использовать TonWeb из глобального контекста, если он доступен
+            if (typeof window !== 'undefined' && (window as any).TonWeb) {
+                this.TonWebLib = (window as any).TonWeb;
+                console.log('TonWeb найден в глобальном контексте window');
             } else {
-                // Динамический импорт TonWeb
+                // Иначе импортируем через ESM
                 try {
-                    console.log('Пытаемся импортировать TonWeb через ESM...');
-                    const tonwebModule = await import('tonweb');
-                    this.TonWebLib = tonwebModule.default || tonwebModule;
+                    const TonWebModule = await import('tonweb');
+                    this.TonWebLib = TonWebModule.default;
                     console.log('TonWeb успешно импортирован через ESM');
                 } catch (importError) {
-                    console.error('Ошибка при импорте TonWeb через ESM:', importError);
+                    console.warn('Не удалось импортировать TonWeb через ESM:', importError);
                     
-                    // Пробуем загрузить TonWeb через скрипт
-                    console.log('Пытаемся загрузить TonWeb через скрипт...');
-                    try {
-                        await new Promise<void>((resolve, reject) => {
-                            const script = document.createElement('script');
-                            script.src = 'https://unpkg.com/tonweb@0.0.62/dist/tonweb.js';
-                            script.onload = () => {
-                                if (window.TonWeb) {
-                                    console.log('TonWeb успешно загружен из:', script.src);
-                                    this.TonWebLib = window.TonWeb;
-                                    resolve();
-                                } else {
-                                    reject(new Error('TonWeb не найден в window после загрузки скрипта'));
-                                }
-                            };
-                            script.onerror = () => {
-                                console.error('Ошибка при загрузке TonWeb через скрипт');
-                                reject(new Error('Ошибка при загрузке TonWeb через скрипт'));
-                            };
-                            document.head.appendChild(script);
-                        });
-                    } catch (scriptError) {
-                        console.error('Не удалось загрузить TonWeb через скрипт:', scriptError);
-                        throw new Error('TonWeb недоступен. Проверьте подключение к интернету и попробуйте перезагрузить страницу.');
+                    // Если динамический импорт не сработал, пробуем загрузить через скрипт
+                    await this.loadTonWebScript();
+                    
+                    // Проверяем, что TonWeb теперь доступен
+                    if (typeof window !== 'undefined' && (window as any).TonWeb) {
+                        this.TonWebLib = (window as any).TonWeb;
+                        console.log('TonWeb успешно загружен из скрипта');
+                    } else {
+                        throw new Error('TonWeb не найден после загрузки скрипта');
                     }
                 }
             }
             
-            // Проверяем наличие TonWebLib перед созданием экземпляра
-            if (!this.TonWebLib) {
-                throw new Error('TonWeb библиотека не инициализирована');
-            }
-            
-            // Выбираем endpoint в зависимости от сети
+            // Создаем провайдер для TonWeb
             const endpoint = this.isTestnet
                 ? 'https://testnet.toncenter.com/api/v2/jsonRPC'
                 : 'https://toncenter.com/api/v2/jsonRPC';
-
-            // Создаем провайдер с API ключом, если он есть
-            const provider = new this.TonWebLib.HttpProvider(endpoint, {
-                apiKey: this.apiKey
-            });
-
-            // Модифицируем провайдер для обработки ошибок
-            const originalSend = provider.send.bind(provider);
-            provider.send = async (method: string, params: any): Promise<any> => {
-                // Проверяем, не находимся ли мы в состоянии rate limit
-                const now = Date.now();
-                if (this.rateLimitedUntil > now) {
-                    const waitTime = this.rateLimitedUntil - now;
-                    console.warn(`API в состоянии ограничения запросов. Ожидание ${waitTime}мс...`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                }
-
+            
+            const providerOptions: any = {
+                apiKey: this.apiKey,
+                retry: 3 // Количество повторных попыток для запросов
+            };
+            
+            // Создаем экземпляр HTTP-провайдера
+            const httpProvider = new this.TonWebLib.HttpProvider(endpoint, providerOptions);
+            
+            // Настраиваем обработку ошибок для провайдера
+            httpProvider.sendOriginal = httpProvider.send;
+            httpProvider.send = async (method: string, params: any) => {
+                const startTime = Date.now();
                 try {
-                    const result = await originalSend(method, params);
-                    return result;
-                } catch (error: any) {
-                    if (error && error.response && typeof error.response === 'object' && error.response.status === 429) {
-                        // Too Many Requests, устанавливаем задержку
-                        this.rateLimitedUntil = Date.now() + this.maxRateLimitWait;
-                        console.warn(`Ограничение запросов (429). Ожидание ${this.maxRateLimitWait}мс...`);
-                        
-                        // Используем кэшированное значение или возвращаем null
-                        return null;
+                    if (Date.now() < this.rateLimitedUntil) {
+                        const waitTime = this.rateLimitedUntil - Date.now();
+                        if (waitTime > 0) {
+                            console.warn(`Ожидание из-за ограничения запросов: ${waitTime}мс`);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
+                        }
                     }
+                    
+                    console.log(`Отправка запроса ${method} к API`);
+                    const result = await httpProvider.sendOriginal(method, params);
+                    return result;
+                } catch (error) {
+                    // Проверяем на ограничение запросов (429)
+                    if (error && (typeof error === 'object') && 
+                        ('status' in error) && (error as any).status === 429) {
+                        
+                        // Устанавливаем задержку для следующих запросов
+                        const retryAfter = (error as any).retryAfter || 1000;
+                        this.rateLimitedUntil = Date.now() + Math.min(retryAfter, this.maxRateLimitWait);
+                        
+                        console.warn(`Получено ограничение запросов (429), следующий запрос через ${retryAfter}мс`);
+                        
+                        // Повторяем запрос после задержки
+                        await new Promise(resolve => setTimeout(resolve, retryAfter));
+                        return await httpProvider.send(method, params);
+                    }
+                    
+                    // Для других ошибок - просто пробрасываем
+                    console.error(`Ошибка API запроса ${method}:`, error);
                     throw error;
+                } finally {
+                    console.log(`Запрос ${method} выполнен за ${Date.now() - startTime}мс`);
                 }
             };
-
-            // Создаем экземпляр TonWeb
-            this.tonweb = new this.TonWebLib(provider);
-            console.log('TonWeb успешно инициализирован для', this.isTestnet ? 'testnet' : 'mainnet');
+            
+            // Создаем экземпляр TonWeb с настроенным провайдером
+            this.tonweb = new this.TonWebLib(httpProvider);
+            
+            console.log(`TonWeb успешно инициализирован для ${this.isTestnet ? 'testnet' : 'mainnet'}`);
+            
+            // Проверим доступ к базовым методам TonWeb для уверенности
+            if (!this.tonweb.utils || typeof this.tonweb.utils.Address !== 'function') {
+                throw new Error('TonWeb инициализирован, но не имеет необходимых методов');
+            }
+            
+            return;
         } catch (error) {
             console.error('Ошибка при инициализации TonWeb:', error);
             this.tonweb = null;
+            this.TonWebLib = null;
+            throw error;
         }
     }
 
@@ -160,11 +175,19 @@ class TonWebInstance {
         return this.tonweb?.provider || null;
     }
 
+    public isInTestnetMode(): boolean {
+        return this.isTestnet;
+    }
+
     public isTonWebReady(): boolean {
         return this.tonweb !== null && this.TonWebLib !== null;
     }
 
-    public async waitForTonWeb(timeout: number = 5000): Promise<boolean> {
+    public async waitForTonWeb(timeout?: number): Promise<boolean> {
+        // Получаем значение таймаута из настроек или используем переданное значение
+        const configTimeout = parseInt(import.meta.env.VITE_TONWEB_TIMEOUT || '5000', 10);
+        const effectiveTimeout = timeout || configTimeout;
+        
         await this.ensureInitialized();
         
         // Если TonWeb уже инициализирован, возвращаем true
@@ -173,31 +196,47 @@ class TonWebInstance {
             return true;
         }
         
-        console.log('TonWeb загружается, ожидаем инициализации...');
+        console.log(`TonWeb загружается, ожидаем инициализации (таймаут: ${effectiveTimeout}мс)...`);
         
+        // Увеличиваем количество попыток и уменьшаем задержку между ними
         const startTime = Date.now();
-        while (Date.now() - startTime < timeout) {
+        const checkInterval = 100; // 100мс между проверками
+        const maxAttempts = Math.floor(effectiveTimeout / checkInterval);
+        let attempts = 0;
+        
+        while (attempts < maxAttempts) {
+            attempts++;
+            
             if (this.isTonWebReady()) {
-                console.log('TonWeb успешно инициализирован');
+                const elapsedTime = Date.now() - startTime;
+                console.log(`TonWeb успешно инициализирован за ${elapsedTime}мс (${attempts} попыток)`);
                 return true;
             }
-            // Пауза 100мс перед следующей проверкой
-            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Небольшая пауза перед следующей проверкой
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
         }
         
         // Еще одна попытка инициализации, если тайм-аут
         if (!this.isTonWebReady()) {
-            console.log('Повторная попытка инициализации TonWeb...');
-            this.initializationPromise = this.initializeTonWeb();
-            await this.initializationPromise;
+            console.warn(`Тайм-аут ожидания TonWeb (${effectiveTimeout}мс). Пробуем повторную инициализацию...`);
             
-            if (this.isTonWebReady()) {
-                console.log('TonWeb успешно инициализирован после повторной попытки');
-                return true;
+            // Очищаем предыдущий промис инициализации
+            this.initializationPromise = null;
+            
+            // Пробуем ещё раз инициализировать
+            try {
+                await this.initializeTonWeb();
+                if (this.isTonWebReady()) {
+                    console.log('TonWeb успешно инициализирован после повторной попытки');
+                    return true;
+                }
+            } catch (error) {
+                console.error('Ошибка при повторной инициализации TonWeb:', error);
             }
         }
         
-        console.warn('TonWeb не инициализирован после ожидания');
+        console.error(`TonWeb не удалось инициализировать в указанный таймаут (${effectiveTimeout}мс) и после повторной попытки`);
         return false;
     }
 
@@ -423,6 +462,35 @@ class TonWebInstance {
             console.error('Ошибка в методе fromNano:', error);
             return Number(amount) / 1e9;
         }
+    }
+
+    private async loadTonWebScript(): Promise<void> {
+        console.log('Пытаемся загрузить TonWeb через скрипт...');
+        
+        // Получаем версию TonWeb из переменных окружения или используем дефолтную
+        const tonwebVersion = import.meta.env.VITE_TONWEB_VERSION || '0.0.62';
+        const scriptUrl = `https://unpkg.com/tonweb@${tonwebVersion}/dist/tonweb.js`;
+        
+        console.log(`Загрузка TonWeb версии ${tonwebVersion} из ${scriptUrl}`);
+        
+        return new Promise<void>((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = scriptUrl;
+            script.onload = () => {
+                if (window.TonWeb) {
+                    console.log(`TonWeb ${tonwebVersion} успешно загружен из: ${scriptUrl}`);
+                    this.TonWebLib = window.TonWeb;
+                    resolve();
+                } else {
+                    reject(new Error('TonWeb не найден в window после загрузки скрипта'));
+                }
+            };
+            script.onerror = () => {
+                console.error(`Ошибка при загрузке TonWeb ${tonwebVersion} из ${scriptUrl}`);
+                reject(new Error(`Ошибка при загрузке TonWeb из ${scriptUrl}`));
+            };
+            document.head.appendChild(script);
+        });
     }
 }
 

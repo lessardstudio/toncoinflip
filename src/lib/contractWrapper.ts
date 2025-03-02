@@ -78,54 +78,73 @@ export class CoinFlipContract {
         }
         
         try {
-            // Обрабатываем разные форматы адреса
-            let formattedAddress = addressStr;
-            
             // Получаем TonWeb непосредственно из экземпляра
             const tonweb = tonwebInstance.getTonWeb();
-            
-            // Создаем новый адрес разными способами
             let address;
             
+            // Очищаем адрес от возможных пробелов
+            const cleanAddressStr = addressStr.trim();
+            console.log(`Пытаемся создать контракт с адресом: ${cleanAddressStr}`);
+            
             try {
-                // 1. Пробуем напрямую использовать адрес, иногда это работает
-                address = new tonweb.utils.Address(formattedAddress);
-                console.log('Адрес успешно создан напрямую:', address.toString());
+                // Метод 1: Используем стандартный конструктор адреса TonWeb
+                address = new tonweb.utils.Address(cleanAddressStr);
+                console.log('Адрес успешно создан через стандартный конструктор');
             } catch (error) {
-                console.warn('Не удалось создать адрес напрямую:', error);
+                console.warn(`Не удалось создать адрес через стандартный конструктор: ${error instanceof Error ? error.message : String(error)}`);
                 
                 try {
-                    // 2. Пробуем без префикса
-                    if (formattedAddress.startsWith('EQ')) {
-                        formattedAddress = formattedAddress.substring(2);
-                        address = new tonweb.utils.Address(formattedAddress);
-                        console.log('Адрес успешно создан без префикса EQ:', address.toString());
+                    // Метод 2: Создаем базовый WC + HEX адрес в формате 0:XXX...
+                    if (cleanAddressStr.startsWith('EQ')) {
+                        // Если адрес начинается с EQ (пользовательский формат), извлекаем base64 часть
+                        // и преобразуем ее в workchain + hex
+                        const base64Part = cleanAddressStr.substring(2);
+                        
+                        // Используем buffer для преобразования
+                        const hexBytes = Array.from(new Uint8Array(Buffer.from(base64Part, 'base64url')))
+                            .map(b => b.toString(16).padStart(2, '0'))
+                            .join('');
+                        
+                        // Формируем полный адрес в формате 0:hex
+                        const rawAddress = `0:${hexBytes}`;
+                        console.log(`Сформирован raw-адрес: ${rawAddress}`);
+                        
+                        // Пробуем создать адрес из raw-формата
+                        address = new tonweb.utils.Address(rawAddress);
+                        console.log('Адрес успешно создан из raw-формата');
                     } else {
-                        throw new Error('Адрес не начинается с префикса EQ');
+                        throw new Error('Адрес не начинается с EQ, невозможно извлечь base64 часть');
                     }
-                } catch (error2) {
-                    console.warn('Не удалось создать адрес без префикса:', error2);
+                } catch (error) {
+                    console.warn(`Не удалось создать адрес из raw-формата: ${error instanceof Error ? error.message : String(error)}`);
                     
                     try {
-                        // 3. Пробуем использовать raw-address (0:<hex>)
-                        const rawAddress = '0:' + Buffer.from(formattedAddress, 'base64').toString('hex');
-                        address = new tonweb.utils.Address(rawAddress);
-                        console.log('Адрес успешно создан из raw-адреса:', address.toString());
-                    } catch (error3) {
-                        console.error('Все попытки создать адрес провалились:', error3);
+                        // Метод 3: Используем встроенный метод для парсинга адреса
+                        // (этот метод может быть доступен в некоторых версиях TonWeb)
+                        if (typeof tonweb.utils.parseAddress === 'function') {
+                            address = tonweb.utils.parseAddress(cleanAddressStr);
+                            console.log('Адрес успешно создан через parseAddress');
+                        } else {
+                            throw new Error('Метод parseAddress не найден в TonWeb');
+                        }
+                    } catch (error) {
+                        console.warn(`Не удалось создать адрес через parseAddress: ${error instanceof Error ? error.message : String(error)}`);
                         
-                        // 4. Создаем заглушку
-                        console.warn('Создаем адрес-заглушку');
+                        // Метод 4: Создаем объект-заглушку, имитирующий адрес
+                        console.warn('Все методы создания адреса не сработали, создаем заглушку');
                         address = {
-                            toString: () => addressStr,
+                            toString: () => cleanAddressStr,
                             wc: 0,
-                            hashPart: new Uint8Array(32)
+                            hashPart: new Uint8Array(32),
+                            isUserFriendly: () => true,
+                            isBounceable: () => true,
+                            isTestOnly: () => tonwebInstance.isInTestnetMode() // Используем публичный метод
                         };
                     }
                 }
             }
             
-            // Создаем простой контракт с подключенным провайдером
+            // Создаем контракт с полученным адресом
             this.contract = {
                 address: address,
                 provider: tonweb.provider,
@@ -133,7 +152,7 @@ export class CoinFlipContract {
                 getAddress: () => address
             };
             
-            console.log('Контракт успешно инициализирован с адресом:', address.toString());
+            console.log(`Контракт успешно инициализирован с адресом: ${address.toString()}`);
         } catch (error) {
             console.error('Критическая ошибка при создании контракта:', error);
             throw error;
