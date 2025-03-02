@@ -1,5 +1,5 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -10,36 +10,47 @@
     <meta name="msapplication-TileColor" content="#da532c">
     <meta name="theme-color" content="#ffffff">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>tCoinFlip</title>
-    <!-- TonWeb загрузка из CDN (резервный вариант) -->
-    <script>
-      // Функция для загрузки TonWeb из CDN
-      (function loadTonWeb() {
-        // Попытка загрузить TonWeb из CDN
-        const loadScript = function(src) {
-          return new Promise(function(resolve, reject) {
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = function() { 
-              console.log('TonWeb успешно загружен из:', src);
-              resolve(); 
-            };
-            script.onerror = function() { 
-              console.warn('Не удалось загрузить TonWeb из:', src);
-              reject(); 
-            };
-            document.head.appendChild(script);
-          });
-        };
-
-        // Попытаемся загрузить из разных источников
-        loadScript('https://unpkg.com/tonweb@0.0.62/dist/tonweb.js')
-          .catch(() => loadScript('https://cdn.jsdelivr.net/npm/tonweb@0.0.62/dist/tonweb.js'))
-          .catch((err) => {
-            console.error('Не удалось загрузить TonWeb из CDN:', err);
-          });
-      })();
-    </script>
+    <title>TON Flip: Бросай монетку и выигрывай TON</title>
+    <meta name="description" content="TON Flip: децентрализованная игра для броска монетки на блокчейне TON. Угадывай результаты и выигрывай криптовалюту TON.">
+    
+    <!-- Загрузка TonWeb перед приложением -->
+    <script src="https://cdn.jsdelivr.net/npm/tonweb@0.0.62/dist/tonweb.js"></script>
+    
+    <!-- Мета-теги для соцсетей -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tonflip.vercel.app">
+    <meta property="og:title" content="TON Flip: Бросай монетку и выигрывай TON">
+    <meta property="og:description" content="TON Flip - прозрачная игра-флипкоин на блокчейне TON. Проверяемая честность, мгновенные выплаты и шанс удвоить свой TON!">
+    <meta property="og:image" content="https://toncoinflip.vercel.app/og-image.jpg">
+    
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://toncoinflip.vercel.app/">
+    <meta property="twitter:title" content="TON Flip: Бросай монетку и выигрывай TON">
+    <meta property="twitter:description" content="TON Flip - прозрачная игра-флипкоин на блокчейне TON. Проверяемая честность, мгновенные выплаты и шанс удвоить свой TON!">
+    <meta property="twitter:image" content="https://toncoinflip.vercel.app/og-image.jpg">
+    
+    <!-- Шрифты -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Базовые стили -->
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #0F0F19;
+        color: #fff;
+      }
+      
+      #root {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
