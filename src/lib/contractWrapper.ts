@@ -21,9 +21,33 @@ export class CoinFlipContract {
     constructor(address: string, provider: ContractProvider) {
         console.log("Инициализация CoinFlipContract с адресом:", address);
         this.provider = provider;
-        // Заменяем символы / на _ в адресе
-        const normalizedAddress = address.replace(/\//g, '_');
-        this.address = Address.parse(normalizedAddress);
+        
+        try {
+            // Пытаемся сразу использовать оригинальный адрес
+            this.address = Address.parse(address);
+        } catch (error) {
+            // Если неудачно, пробуем с заменой символов
+            try {
+                // Заменяем слеши на подчеркивания
+                const addressWithUnderscores = address.replace(/\//g, '_');
+                this.address = Address.parse(addressWithUnderscores);
+                console.log("Адрес успешно нормализован:", addressWithUnderscores);
+            } catch (underscoreError) {
+                // Если и это не помогло, пробуем заменить подчеркивания на слеши
+                try {
+                    const addressWithSlashes = address.replace(/_/g, '/');
+                    this.address = Address.parse(addressWithSlashes);
+                    console.log("Адрес успешно нормализован со слешами:", addressWithSlashes);
+                } catch (slashError) {
+                    // Если все попытки не удались, выводим детальную ошибку
+                    console.error("Невозможно распарсить адрес контракта:", address);
+                    console.error("Исходная ошибка:", error);
+                    // Используем дефолтный адрес из .env без модификаций в качестве последней попытки
+                    const envAddress = import.meta.env.VITE_CONTRACT_ADDRESS || address;
+                    this.address = Address.parse(envAddress);
+                }
+            }
+        }
         
         // Запускаем асинхронную проверку инициализации TonWeb
         this.initTonWeb();

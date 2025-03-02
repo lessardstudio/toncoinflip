@@ -232,6 +232,23 @@ class TonWebInstance {
         return await this.tonweb.getTransactions(address);
     }
 
+    // Нормализуем адреса TON, чтобы избежать проблем с форматом
+    private normalizeAddress(address: string): string {
+        try {
+            // Пробуем использовать нативный метод Address для нормализации
+            if (this.TonWebLib && this.TonWebLib.utils && this.TonWebLib.utils.Address) {
+                return new this.TonWebLib.utils.Address(address).toString();
+            }
+            
+            // Если в TonWeb нет метода нормализации, делаем простую замену
+            // Мы заменяем подчеркивания на слеши, так как в TON адресах обычно используются слеши
+            return address.replace(/_/g, '/');
+        } catch (error) {
+            console.warn('Ошибка при нормализации адреса:', error);
+            return address; // Возвращаем исходный адрес в случае ошибки
+        }
+    }
+
     // Метод для получения баланса с проверкой на ограничение запросов и кэшированием
     public async getBalance(address: string): Promise<number | null> {
         try {
@@ -241,17 +258,21 @@ class TonWebInstance {
                 return null;
             }
 
+            // Нормализуем адрес
+            const normalizedAddress = this.normalizeAddress(address);
+            console.log(`Получение баланса для нормализованного адреса: ${normalizedAddress}`);
+
             // Проверяем кэш
             const now = Date.now();
-            const cachedData = this.balanceCache.get(address);
+            const cachedData = this.balanceCache.get(normalizedAddress);
             if (cachedData && (now - cachedData.timestamp) < this.balanceCacheTime) {
-                console.log(`Используем кэшированный баланс для ${address}`);
+                console.log(`Используем кэшированный баланс для ${normalizedAddress}`);
                 return cachedData.balance;
             }
 
             // Сначала пробуем через TonWeb
             try {
-                const balance = await this.tonweb.getBalance(address);
+                const balance = await this.tonweb.getBalance(normalizedAddress);
                 // Кэшируем результат
                 if (balance !== undefined) {
                     // Конвертируем из наноТОН в ТОН (делим на 10^9)
@@ -261,7 +282,7 @@ class TonWebInstance {
                     
                     console.log(`Получен баланс кошелька через TonWeb: ${balanceNumber} TON`);
                     
-                    this.balanceCache.set(address, {
+                    this.balanceCache.set(normalizedAddress, {
                         balance: balanceNumber,
                         timestamp: now
                     });
@@ -272,7 +293,7 @@ class TonWebInstance {
                 
                 // Если есть кэш, возвращаем его даже если он устарел
                 if (cachedData) {
-                    console.log(`Возвращаем устаревший кэшированный баланс для ${address}`);
+                    console.log(`Возвращаем устаревший кэшированный баланс для ${normalizedAddress}`);
                     return cachedData.balance;
                 }
                 
@@ -283,7 +304,7 @@ class TonWebInstance {
                         : 'https://toncenter.com/api/v2/getAddressBalance';
                     
                     const url = new URL(endpoint);
-                    url.searchParams.append('address', address);
+                    url.searchParams.append('address', normalizedAddress);
                     
                     if (this.apiKey) {
                         url.searchParams.append('api_key', this.apiKey);
@@ -303,7 +324,7 @@ class TonWebInstance {
                         if (data && data.result) {
                             const balanceNumber = Number(data.result) / 1e9;
                             // Кэшируем результат
-                            this.balanceCache.set(address, {
+                            this.balanceCache.set(normalizedAddress, {
                                 balance: balanceNumber,
                                 timestamp: now
                             });
