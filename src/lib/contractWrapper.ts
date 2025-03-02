@@ -71,7 +71,7 @@ export class CoinFlipContract {
             }
             
             // Пробуем получить баланс через TonWeb
-            const tonweb = tonwebInstance.getTonWeb();
+            //const tonweb = tonwebInstance.getTonWeb();
             
             // Проверяем инициализацию TonWeb
             if (!this.isTonWebInitialized) {

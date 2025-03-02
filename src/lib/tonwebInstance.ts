@@ -5,10 +5,10 @@
 
 // TonWeb в сборке Vite может требовать использования ESM импорта.
 // Определяем интерфейс для TonWeb
-interface ITonWeb {
-    new(provider: any): any;
-    HttpProvider?: any;
-}
+//interface ITonWeb {
+//    new(provider: any): any;
+//    HttpProvider?: any;
+//}
 
 // Определяем тип для window с TonWeb
 declare global {
