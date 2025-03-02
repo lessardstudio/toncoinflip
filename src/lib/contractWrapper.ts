@@ -25,27 +25,29 @@ export class CoinFlipContract {
         const normalizedAddress = address.replace(/\//g, '_');
         this.address = Address.parse(normalizedAddress);
         
-        // Проверяем доступность TonWeb через синглтон (синхронная проверка)
-        if (tonwebInstance.isTonWebReady()) {
-            console.log("TonWeb готов и доступен");
-            this.isTonWebInitialized = true;
-        } else {
-            console.log("TonWeb загружается, подождем инициализации...");
-            // Запускаем асинхронную проверку инициализации
-            this.waitForTonWebInit();
-        }
+        // Запускаем асинхронную проверку инициализации TonWeb
+        this.initTonWeb();
     }
 
-    // Асинхронный метод для ожидания инициализации TonWeb
-    private async waitForTonWebInit(): Promise<void> {
+    // Асинхронный метод для инициализации TonWeb
+    private async initTonWeb(): Promise<void> {
         try {
+            // Проверяем доступность TonWeb через синглтон
+            this.isTonWebInitialized = tonwebInstance.isTonWebReady();
+            
+            if (this.isTonWebInitialized) {
+                console.log("TonWeb уже готов и доступен");
+                return;
+            }
+            
+            console.log("TonWeb загружается, ожидаем инициализации...");
             const isReady = await tonwebInstance.waitForTonWeb(5000);
             this.isTonWebInitialized = isReady;
             console.log(isReady 
                 ? "TonWeb успешно инициализирован" 
                 : "TonWeb не инициализирован за отведенное время");
         } catch (error) {
-            console.error("Ошибка при ожидании инициализации TonWeb:", error);
+            console.error("Ошибка при инициализации TonWeb:", error);
             this.isTonWebInitialized = false;
         }
     }

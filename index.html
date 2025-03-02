@@ -11,6 +11,35 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>tCoinFlip</title>
+    <!-- TonWeb загрузка из CDN (резервный вариант) -->
+    <script>
+      // Функция для загрузки TonWeb из CDN
+      (function loadTonWeb() {
+        // Попытка загрузить TonWeb из CDN
+        const loadScript = function(src) {
+          return new Promise(function(resolve, reject) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = function() { 
+              console.log('TonWeb успешно загружен из:', src);
+              resolve(); 
+            };
+            script.onerror = function() { 
+              console.warn('Не удалось загрузить TonWeb из:', src);
+              reject(); 
+            };
+            document.head.appendChild(script);
+          });
+        };
+
+        // Попытаемся загрузить из разных источников
+        loadScript('https://unpkg.com/tonweb@0.0.62/dist/tonweb.js')
+          .catch(() => loadScript('https://cdn.jsdelivr.net/npm/tonweb@0.0.62/dist/tonweb.js'))
+          .catch((err) => {
+            console.error('Не удалось загрузить TonWeb из CDN:', err);
+          });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

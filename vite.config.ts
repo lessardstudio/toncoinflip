@@ -9,23 +9,50 @@ export default defineConfig({
     react(),
     // Добавляем полифилы для Node.js в браузере
     nodePolyfills({
-      // Указываем, что нам нужен полифил для Buffer
-      include: ['buffer', 'process'],
+      // Полифиллы необходимые для TonWeb
+      include: [
+        'crypto',
+        'stream',
+        'util',
+        'buffer',
+        'events',
+        'process',
+        'string_decoder',
+        'assert',
+        'path'
+      ],
       globals: {
         Buffer: true,
-        process: true,
         global: true,
+        process: true,
       },
+      protocolImports: true,
     }),
   ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
-    // Отключаем оптимизацию для tonweb, чтобы избежать проблем с Buffer
     exclude: ['tonweb'],
+    esbuildOptions: {
+      target: 'esnext',
+    }
+  },
+  build: {
+    target: 'esnext',
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          tonweb: ['tonweb'],
+        }
+      }
+    }
   },
   server: {
     cors: true,
@@ -57,7 +84,7 @@ export default defineConfig({
     'process.env': {
       TON_NETWORK: JSON.stringify('testnet'),
       VITE_CONTRACT_ADDRESS: JSON.stringify(process.env.VITE_CONTRACT_ADDRESS || ''),
-      VITE_IS_TESTNET: JSON.stringify('true')
+      VITE_IS_TESTNET: JSON.stringify(true),
     },
     // Для некоторых библиотек нужно явно указать global
     global: 'globalThis',

@@ -63,83 +63,22 @@ export default function BetBlock(){
                 // Создаем экземпляр контракта с имеющимся провайдером
                 const contract = new CoinFlipContract(contractAddress, provider as any);
                 
-                // Получаем баланс контракта
-                const contractBalanceValue = await contract.getBalance();
-                setContractBalance(contractBalanceValue);
+                // Получаем балансы уже в TON (после изменений в tonwebInstance.ts)
+                const contractBalance = await contract.getBalance();
+                const walletBalance = wallet?.account?.address 
+                    ? await contract.getWalletBalance(wallet.account.address) 
+                    : 0;
                 
-                // Если кошелек подключен, получаем его баланс
-                if (connected && wallet?.account?.address) {
-                    // Пробуем получить баланс кошелька через contractWrapper
-                    const walletBalanceValue = await contract.getWalletBalance(wallet.account.address);
-                    localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
-                    setWalletBalance(walletBalanceValue);
-                    
-                    // Также пробуем получить баланс через TonConnect напрямую (если это поддерживается)
-                    try {
-                        // Более надежная проверка доступности методов в wallet
-                        if (tonConnectUI.connector && 
-                            tonConnectUI.connector.wallet && 
-                            typeof tonConnectUI.connector.wallet === 'object' && 
-                            tonConnectUI.connector.wallet !== null) {
-                            
-                            const walletObj = tonConnectUI.connector.wallet as any;
-                            
-                            // Проверяем наличие метода getBalance
-                            if ('getBalance' in walletObj && typeof walletObj.getBalance === 'function') {
-                                const tcBalance = await walletObj.getBalance();
-                                console.log("Баланс через TonConnect UI wallet:", tcBalance);
-                                
-                                // Если получили валидное значение, используем его
-                                if (typeof tcBalance === 'number' || typeof tcBalance === 'string') {
-                                    const balanceNumber = Number(tcBalance);
-                                    if (!isNaN(balanceNumber) && balanceNumber > 0) {
-                                        console.log("Используем баланс из TonConnect UI:", balanceNumber);
-                                        localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
-                                        setWalletBalance(balanceNumber);
-                                        
-                                        // Обновляем кэш
-                                        localStorage.setItem('cachedWalletBalance', balanceNumber.toString());
-                                        localStorage.setItem('lastWalletFetchTime', Date.now().toString());
-                                    }
-                                }
-                            }
-                            
-                            // Альтернативный путь - если метод называется по-другому
-                            else if ('getAccountBalance' in walletObj && typeof walletObj.getAccountBalance === 'function') {
-                                const tcBalance = await walletObj.getAccountBalance();
-                                console.log("Баланс через TonConnect UI getAccountBalance:", tcBalance);
-                                
-                                // Анализ и использование результата как выше
-                                if (typeof tcBalance === 'number' || typeof tcBalance === 'string') {
-                                    const balanceNumber = Number(tcBalance);
-                                    if (!isNaN(balanceNumber) && balanceNumber > 0) {
-                                        console.log("Используем баланс из TonConnect UI:", balanceNumber);
-                                        localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
-                                        setWalletBalance(balanceNumber);
-                                        
-                                        // Обновляем кэш
-                                        localStorage.setItem('cachedWalletBalance', balanceNumber.toString());
-                                        localStorage.setItem('lastWalletFetchTime', Date.now().toString());
-                                    }
-                                }
-                            }
-                        }
-                    } catch (tcError) {
-                        console.log("Ошибка при получении баланса через TonConnect UI:", tcError);
-                    }
-                    
-                    // Обновляем максимальную ставку на основе новых данных
-                    setContractBalance(contractBalanceValue);
-                    
-                    // Обновляем максимальную ставку на основе состояний, а не локальных переменных
-                    setTimeout(() => {
-                        updateMaxBet(contractBalanceValue, walletBalanceValue);
-                    }, 0);
-                } else {
-                    localStorage.setItem('balance_wallet', `${0}`)
-                    setWalletBalance(0);
-                    updateMaxBet(contractBalanceValue, 0);
-                }
+                console.log(`Баланс контракта: ${contractBalance} TON, баланс кошелька: ${walletBalance} TON`);
+                
+                // Устанавливаем балансы
+                setContractBalance(contractBalance);
+                setWalletBalance(walletBalance);
+                
+                // Обновляем максимальную ставку
+                updateMaxBet(contractBalance, walletBalance);
+                
+                return { contractBalance, walletBalance };
             } catch (error) {
                 console.error("Ошибка при получении балансов:", error);
             }
