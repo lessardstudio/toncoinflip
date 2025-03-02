@@ -1,4 +1,3 @@
-import { Address, ContractProvider } from '@ton/core';
 import { beginCell } from '@ton/core';
 import tonwebInstance from './tonwebInstance';
 
@@ -12,45 +11,111 @@ export interface FlipResult {
     transactionHash?: string;
 }
 
+// Интерфейс для адреса
+interface AddressWrapper {
+    toString: () => string;
+}
+
+// Интерфейс для контрактного провайдера
+export interface ContractProviderWrapper {
+    internal: (address: string, params: any) => Promise<any>;
+    // Другие методы провайдера...
+}
+
 // Более простая реализация без прямого импорта из смарт-контракта
 export class CoinFlipContract {
-    private address: Address;
-    private provider: ContractProvider;
+    private static instance: CoinFlipContract;
+    private contract: any;
+    private address: string;
+    private provider: ContractProviderWrapper;
     private isTonWebInitialized: boolean = false;
 
-    constructor(address: string, provider: ContractProvider) {
-        console.log("Инициализация CoinFlipContract с адресом:", address);
-        this.provider = provider;
+    constructor(addressStr: string, provider: ContractProviderWrapper) {
+        console.log(`Инициализация CoinFlipContract с адресом: ${addressStr}`);
         
+        this.provider = provider;
+        this.address = addressStr; // Сохраняем оригинальный строковый адрес
+        
+        // Попробуем разные подходы для создания контракта
         try {
-            // Пытаемся сразу использовать оригинальный адрес
-            this.address = Address.parse(address);
+            // Очистим адрес от специальных символов, которые могут мешать
+            let cleanAddress = addressStr;
+            
+            // Пробуем заменить подчеркивания на слеши (формат для Base64URL)
+            if (cleanAddress.includes('_')) {
+                cleanAddress = cleanAddress.replace(/_/g, '/');
+            }
+            
+            console.log('Пытаемся создать контракт с адресом:', cleanAddress);
+            this.createContract(cleanAddress);
         } catch (error) {
-            // Если неудачно, пробуем с заменой символов
+            console.warn('Ошибка при создании контракта с очищенным адресом:', error);
+            
             try {
-                // Заменяем слеши на подчеркивания
-                const addressWithUnderscores = address.replace(/\//g, '_');
-                this.address = Address.parse(addressWithUnderscores);
-                console.log("Адрес успешно нормализован:", addressWithUnderscores);
-            } catch (underscoreError) {
-                // Если и это не помогло, пробуем заменить подчеркивания на слеши
-                try {
-                    const addressWithSlashes = address.replace(/_/g, '/');
-                    this.address = Address.parse(addressWithSlashes);
-                    console.log("Адрес успешно нормализован со слешами:", addressWithSlashes);
-                } catch (slashError) {
-                    // Если все попытки не удались, выводим детальную ошибку
-                    console.error("Невозможно распарсить адрес контракта:", address);
-                    console.error("Исходная ошибка:", error);
-                    // Используем дефолтный адрес из .env без модификаций в качестве последней попытки
-                    const envAddress = import.meta.env.VITE_CONTRACT_ADDRESS || address;
-                    this.address = Address.parse(envAddress);
+                // Пробуем использовать оригинальный адрес без изменений
+                console.log('Пытаемся создать контракт с оригинальным адресом');
+                this.createContract(addressStr);
+            } catch (secondError) {
+                console.warn('Ошибка при создании контракта с оригинальным адресом:', secondError);
+                
+                // Используем адрес из .env в последней попытке
+                const envAddress = import.meta.env.VITE_CONTRACT_ADDRESS as string;
+                if (envAddress && envAddress !== addressStr) {
+                    try {
+                        console.log('Пытаемся создать контракт с адресом из .env:', envAddress);
+                        this.createContract(envAddress);
+                    } catch (thirdError) {
+                        console.error('Критическая ошибка: невозможно создать контракт', thirdError);
+                        
+                        // Создаем контракт-заглушку
+                        this.contract = { 
+                            address: { toString: () => addressStr },
+                            methods: {}
+                        };
+                    }
+                } else {
+                    console.error('Критическая ошибка: невозможно создать контракт, адрес из .env совпадает с переданным');
+                    
+                    // Создаем контракт-заглушку
+                    this.contract = { 
+                        address: { toString: () => addressStr },
+                        methods: {}
+                    };
                 }
             }
         }
         
         // Запускаем асинхронную проверку инициализации TonWeb
         this.initTonWeb();
+    }
+    
+    private createContract(addressStr: string): void {
+        // Проверим, что tonweb инициализирован
+        if (!tonwebInstance.getTonWeb()) {
+            throw new Error('TonWeb не инициализирован');
+        }
+        
+        const TonWeb = (window as any).TonWeb;
+        
+        if (!TonWeb) {
+            throw new Error('TonWeb не найден в глобальном объекте window');
+        }
+        
+        try {
+            // Пробуем создать адрес напрямую без парсинга
+            const address = new TonWeb.utils.Address(addressStr);
+            console.log('Адрес успешно создан:', address.toString());
+            
+            // Создаем экземпляр контракта
+            this.contract = new TonWeb.token.jetton.JettonMinter(tonwebInstance.getTonWeb(), {
+                address: address
+            });
+            
+            console.log('Контракт успешно инициализирован с адресом:', address.toString());
+        } catch (error) {
+            console.error('Ошибка при создании адреса:', error);
+            throw error;
+        }
     }
 
     // Асинхронный метод для инициализации TonWeb
@@ -99,7 +164,6 @@ export class CoinFlipContract {
             }
             
             // Пробуем получить баланс через TonWeb
-            //const tonweb = tonwebInstance.getTonWeb();
             
             // Проверяем инициализацию TonWeb
             if (!this.isTonWebInitialized) {
@@ -114,7 +178,7 @@ export class CoinFlipContract {
             }
             
             // Преобразуем адрес в строку для безопасной передачи в TonWeb
-            const contractAddressStr = this.address.toString();
+            const contractAddressStr = this.contract.address.toString();
             console.log(`Получаем баланс контракта для адреса: ${contractAddressStr}`);
             
             // Получаем баланс через TonWeb синглтон
@@ -144,7 +208,7 @@ export class CoinFlipContract {
                         typeof providerAny.getBalance === 'function'
                     ) {
                         console.log("Пробуем получить баланс через TonConnect провайдер");
-                        const balance = await providerAny.getBalance(this.address);
+                        const balance = await providerAny.getBalance(this.contract.address);
                         const balanceInTon = Number(balance) / 1_000_000_000;
                         console.log(`Получен баланс контракта через TonConnect: ${balanceInTon} TON`);
                         
@@ -259,7 +323,7 @@ export class CoinFlipContract {
             
             // Отладочная информация
             console.log("Сформировано сообщение для контракта:", {
-                address: this.address.toString(),
+                address: this.contract.address.toString(),
                 amount: amount,
                 messageBody: messageBody.toString()
             });
@@ -269,7 +333,7 @@ export class CoinFlipContract {
             console.log("Base64 BOC:", base64Boc);
             
             // Вызываем метод internal из провайдера
-            const result = await (this.provider as any).internal(this.address.toString(), {
+            const result = await (this.provider as any).internal(this.contract.address.toString(), {
                 value: amount * 1_000_000_000, // конвертируем TON в нано-TON
                 body: messageBody
             });
@@ -354,14 +418,14 @@ export class CoinFlipContract {
         }
     }
 
-    async getOwner(): Promise<Address> {
+    async getOwner(): Promise<AddressWrapper> {
         try {
             console.log("Запрос владельца контракта");
             // Упрощенная версия без вызова метода контракта
-            return this.address;
+            return this.contract.address;
         } catch (error) {
             console.error("Ошибка при получении владельца:", error);
-            return this.address;
+            return this.contract.address;
         }
     }
 } 
