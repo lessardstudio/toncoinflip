@@ -24,9 +24,7 @@ export interface ContractProviderWrapper {
 
 // Более простая реализация без прямого импорта из смарт-контракта
 export class CoinFlipContract {
-    private static instance: CoinFlipContract;
     private contract: any;
-    private address: string;
     private provider: ContractProviderWrapper;
     private isTonWebInitialized: boolean = false;
 
@@ -34,7 +32,6 @@ export class CoinFlipContract {
         console.log(`Инициализация CoinFlipContract с адресом: ${addressStr}`);
         
         this.provider = provider;
-        this.address = addressStr; // Сохраняем оригинальный строковый адрес
         
         // Попробуем разные подходы для создания контракта
         try {
