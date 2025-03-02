@@ -84,6 +84,7 @@ export const en : ILang ={
   connectWallet: 'Connect TON wallet',
   bet1:'TON',
   bet2:'NOT',
+  balance: '',
 };
 
 export const ru: ILang ={
@@ -142,4 +143,6 @@ export const ru: ILang ={
   connectWallet: 'Подключить кошелек TON',
   bet1:'TON',
   bet2:'NOT',
+  balance: '',
+
 };

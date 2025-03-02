@@ -11,6 +11,7 @@ import { useCallback, useState, useEffect } from "react";
 import { CoinFlipContract, FlipResult } from "@/lib/contractWrapper";
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { toast } from "react-toastify";
+import tonwebInstance from '@/lib/tonwebInstance';
 
 // Получаем адрес контракта из переменных окружения
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'EQDTu0cHyVvEaUMF9NYk9p_MAUKtHxR_mZC15mvoB9tYwJ6r';
@@ -79,26 +80,47 @@ export default function MainPage() {
                         const walletAddress = wallet.account.address;
                         console.log("Запрос баланса кошелька по адресу:", walletAddress);
                         
-                        // Запрашиваем баланс через API TON
-                        const response = await fetch(`https://testnet.toncenter.com/api/v2/getAddressBalance?address=${walletAddress}`);
-                        const data = await response.json();
+                        // Пробуем сначала получить баланс через TonWeb для максимальной скорости
+                        try {
+                            const tonwebBalance = await tonwebInstance.getBalance(walletAddress);
+                            if (tonwebBalance !== null) {
+                                console.log("Обновление: баланс кошелька через TonWeb:", tonwebBalance, "TON");
+                                setWalletBalance(tonwebBalance);
+                                localStorage.setItem('balance_wallet', `${tonwebBalance}`);
+                                return; // Выходим из функции, если получили баланс через TonWeb
+                            }
+                        } catch (tonwebError) {
+                            console.warn("Не удалось получить баланс через TonWeb:", tonwebError);
+                        }
                         
-                        if (data.ok) {
-                            // Преобразуем нано-TON в TON
-                            const balanceInTon = Number(data.result) / 1_000_000_000;
+                        // Проверяем кэш
+                        const cacheKey = `balance_${walletAddress}`;
+                        const cachedBalance = localStorage.getItem(cacheKey);
+                        const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
+                        const now = Date.now();
+                        const CACHE_LIFETIME = 12000; // 12 секунд
+                        
+                        // Если есть актуальные данные в кэше, используем их
+                        if (cachedBalance && now - cachedTime < CACHE_LIFETIME) {
+                            const balanceInTon = parseFloat(cachedBalance) / 1_000_000_000;
+                            console.log(`Используем кэшированный баланс кошелька: ${balanceInTon} TON (возраст кэша: ${Math.round((now - cachedTime)/1000)}с)`);
+                            localStorage.setItem('balance_wallet', `${balanceInTon}`);
+                            setWalletBalance(balanceInTon);
+                        } else {
+                            // Используем ContractWrapper для получения баланса
+                            const balanceInTon = await contractInstance.getWalletBalance(walletAddress);
+                            localStorage.setItem('balance_wallet', `${balanceInTon}`);
                             setWalletBalance(balanceInTon);
                             console.log("Баланс кошелька:", balanceInTon, "TON");
-                        } else {
-                            console.error("Ошибка API при получении баланса кошелька:", data.error);
-                            // Используем фиксированное значение в случае ошибки
-                            setWalletBalance(5);
                         }
                     } catch (error) {
                         console.error("Ошибка при получении баланса кошелька:", error);
                         // Используем фиксированное значение в случае ошибки
+                        localStorage.setItem('balance_wallet', `${5}`);
                         setWalletBalance(5);
-                        console.log("Используется фиксированное значение баланса кошелька: 5 TON");
                     }
+                } else {
+                    console.log("Кошелек не подключен, не запрашиваем баланс кошелька");
                 }
             } catch (error) {
                 console.error("Ошибка инициализации контракта:", error);
@@ -159,20 +181,58 @@ export default function MainPage() {
     
     // Функция обновления баланса кошелька
     const updateWalletBalance = async () => {
-        if (!wallet?.account) return;
-        
         try {
-            const walletAddress = wallet.account.address;
-            const response = await fetch(`https://testnet.toncenter.com/api/v2/getAddressBalance?address=${walletAddress}`);
-            const data = await response.json();
-            
-            if (data.ok) {
-                const balanceInTon = Number(data.result) / 1_000_000_000;
-                setWalletBalance(balanceInTon);
-                console.log("Обновлен баланс кошелька:", balanceInTon, "TON");
+            // Если есть кошелек и контракт
+            if (wallet && wallet.account && wallet.account.address && contract) {
+                const walletAddress = wallet.account.address.toString();
+                
+                // Проверяем кэш
+                const cacheKey = `balance_${walletAddress}`;
+                const cachedBalance = localStorage.getItem(cacheKey);
+                const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
+                const now = Date.now();
+                const CACHE_LIFETIME = 12000; // 12 секунд
+                
+                // Если есть актуальные данные в кэше, используем их
+                if (cachedBalance && now - cachedTime < CACHE_LIFETIME) {
+                    const balanceInTon = parseFloat(cachedBalance) / 1_000_000_000;
+                    
+                    // Проверка на NaN 
+                    if (isNaN(balanceInTon)) {
+                        console.error("Кэшированный баланс не является числом (NaN), получаем новый баланс");
+                        // Удаляем некорректное значение из кэша
+                        localStorage.removeItem(cacheKey);
+                        localStorage.removeItem(`${cacheKey}_time`);
+                        
+                        // Запрашиваем актуальный баланс
+                        const newBalance = await contract.getWalletBalance(walletAddress);
+                        setWalletBalance(newBalance);
+                        localStorage.setItem('balance_wallet', `${newBalance}`);
+                        console.log("Обновлен баланс кошелька:", newBalance, "TON");
+                    } else {
+                        console.log(`Используем кэшированный баланс кошелька: ${balanceInTon} TON (возраст кэша: ${Math.round((now - cachedTime)/1000)}с)`);
+                        localStorage.setItem('balance_wallet', `${balanceInTon}`);
+                        setWalletBalance(balanceInTon);
+                    }
+                } else {
+                    // Используем ContractWrapper для получения баланса
+                    const balanceInTon = await contract.getWalletBalance(walletAddress);
+                    
+                    // Проверка на NaN
+                    if (isNaN(balanceInTon)) {
+                        console.error("Полученный баланс не является числом (NaN), используем значение по умолчанию");
+                        setWalletBalance(5);
+                        localStorage.setItem('balance_wallet', "5");
+                    } else {
+                        localStorage.setItem('balance_wallet', `${balanceInTon}`);
+                        setWalletBalance(balanceInTon);
+                        console.log("Обновление: баланс кошелька:", balanceInTon, "TON");
+                    }
+                }
             }
         } catch (error) {
             console.error("Ошибка при обновлении баланса кошелька:", error);
+            // Не обновляем значение в случае ошибки, оставляем предыдущее
         }
     };
     
@@ -182,12 +242,23 @@ export default function MainPage() {
         
         try {
             const balance = await contractInstance.getBalance();
+            
+            // Проверка на валидность полученного баланса
+            if (isNaN(balance)) {
+                console.error("Получено невалидное значение баланса контракта (NaN)");
+                // Устанавливаем дефолтное значение
+                setContractBalance(50);
+                return 50;
+            }
+            
             setContractBalance(balance);
             console.log("Баланс контракта:", balance, "TON");
             return balance;
         } catch (error) {
             console.error("Ошибка при получении баланса контракта:", error);
-            return 0;
+            // Устанавливаем дефолтное значение в случае ошибки
+            setContractBalance(50);
+            return 50;
         }
     };
     
@@ -320,6 +391,7 @@ export default function MainPage() {
         );
     };
 
+    const isMobile = window.innerWidth <= 768;
     return (
         <>
         <div className="flex flex-row justify-evenly gap-x-6 gap-y-10 flex-wrap xl:flex-nowrap">
@@ -341,17 +413,17 @@ export default function MainPage() {
 
                 <div className="choseCount flex-nowrap flex flex-col justify-between items-start h-full">
                     <div className="max-w-[300px] grid grid-cols-4 grid-rows-2 grid-flow-row gap-1">
-                        <div className="text-sm text-center pl-2 text-[hsla(var(--main-col)/0.5)] leading-8">{T.bet}:</div>
+                        <div className={`text-sm text-center pl-2 text-[hsla(var(--main-col)/0.5)] leading-8 ${isMobile ? `flex justify-center items-center`:`justify-start items-start`}`}>{T.bet}:</div>
                         <BetBlock/>
                     </div>
 
-                    <div className="text-lg text-nowrap text-center p-2 rounded-xl w-full
+                    <div className={`text-lg text-nowrap text-center p-2 mt-2 rounded-xl w-full
                     bg-[hsla(var(--main-col)/1)]
                     text-[hsl(var(--main-col-bg))]
                     hover:text-[hsla(var(--main-col-bg)/0.9)]
                     hover:bg-[hsla(var(--main-col)/0.6)]
                     transition-colors ease-in-out duration-300
-                    select-none cursor-pointer"
+                    select-none cursor-pointer ${isMobile ? `py-5 px-3`:`p-2`}`}
                     onClick={handleBet}>{isLoading ? "Отправка..." : T.flipBtn}</div>
                 </div>
             </div>

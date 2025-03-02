@@ -1,5 +1,6 @@
 import { Address, ContractProvider } from '@ton/core';
 import { beginCell } from '@ton/core';
+import tonwebInstance from './tonwebInstance';
 
 // Добавляем тип для результата ставки
 export interface FlipResult {
@@ -15,142 +16,98 @@ export interface FlipResult {
 export class CoinFlipContract {
     private address: Address;
     private provider: ContractProvider;
+    private isTonWebInitialized: boolean = false;
 
     constructor(address: string, provider: ContractProvider) {
         console.log("Инициализация CoinFlipContract с адресом:", address);
         this.provider = provider;
         this.address = Address.parse(address);
-    }
-
-    // Вспомогательный метод для проверки сети (mainnet/testnet)
-    private getApiEndpoint(): string {
-        // Для тестнета используем testnet.toncenter.com, для основной сети - toncenter.com
-        const isTestnet = import.meta.env.VITE_IS_TESTNET === 'true' || import.meta.env.VITE_TESTNET === 'true';
-        const baseUrl = isTestnet ? 'https://testnet.toncenter.com/api/v2' : 'https://toncenter.com/api/v2';
         
-        // Если указан свой эндпоинт, используем его
-        return import.meta.env.VITE_TON_ENDPOINT || baseUrl;
-    }
-
-    // Вспомогательный метод для получения баланса через HTTP API
-    private async getBalanceViaHttp(address: string): Promise<number | null> {
-        try {
-            const baseEndpoint = this.getApiEndpoint();
-            const apiKey = import.meta.env.VITE_TON_API_KEY || '';
-            
-            // Формируем правильный URL с параметром address
-            const url = `${baseEndpoint}/getAddressBalance?address=${encodeURIComponent(address)}`;
-            
-            console.log("Выполняем HTTP запрос для получения баланса:", url);
-            
-            // Формируем заголовки запроса
-            const headers: Record<string, string> = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            };
-            
-            // Добавляем API ключ в заголовки, если он указан
-            if (apiKey) {
-                headers['X-API-Key'] = apiKey;
-            }
-            
-            // Пробуем также использовать Authorization заголовок с тем же ключом
-            if (apiKey && apiKey.length > 10) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
-            }
-            
-            // Выполняем запрос с таймаутом в 5 секунд
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers,
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status} - ${await response.text()}`);
-            }
-            
-            const data = await response.json();
-            console.log("Ответ от API для баланса:", data);
-            
-            // Обрабатываем разные форматы ответа
-            
-            // Формат 1: { ok: true, result: "123456789" }
-            if (data.ok === true && data.result) {
-                const balanceInNanoTon = Number(data.result);
-                if (!isNaN(balanceInNanoTon)) {
-                    return balanceInNanoTon / 1_000_000_000;
-                }
-            }
-            
-            // Формат 2: { balance: "123456789" }
-            if (data.balance) {
-                const balanceInNanoTon = Number(data.balance);
-                if (!isNaN(balanceInNanoTon)) {
-                    return balanceInNanoTon / 1_000_000_000;
-                }
-            }
-            
-            // Формат 3: Прямое число в ответе
-            if (typeof data === 'number') {
-                return data / 1_000_000_000;
-            }
-            
-            // Формат 4: Строка с числом в ответе
-            if (typeof data === 'string') {
-                const balanceInNanoTon = Number(data);
-                if (!isNaN(balanceInNanoTon)) {
-                    return balanceInNanoTon / 1_000_000_000;
-                }
-            }
-            
-            // Формат 5: Проверка других возможных полей
-            const possibleFields = ['result', 'data', 'value', 'amount'];
-            for (const field of possibleFields) {
-                if (data[field] !== undefined) {
-                    const balanceInNanoTon = Number(data[field]);
-                    if (!isNaN(balanceInNanoTon)) {
-                        return balanceInNanoTon / 1_000_000_000;
-                    }
-                }
-            }
-            
-            console.error("Не удалось распарсить ответ API для баланса:", data);
-            return null;
-        } catch (error) {
-            console.error("Ошибка HTTP API при получении баланса:", error);
-            return null;
+        // Проверяем доступность TonWeb через синглтон (синхронная проверка)
+        if (tonwebInstance.isTonWebReady()) {
+            console.log("TonWeb готов и доступен");
+            this.isTonWebInitialized = true;
+        } else {
+            console.log("TonWeb загружается, подождем инициализации...");
+            // Запускаем асинхронную проверку инициализации
+            this.waitForTonWebInit();
         }
     }
 
+    // Асинхронный метод для ожидания инициализации TonWeb
+    private async waitForTonWebInit(): Promise<void> {
+        try {
+            const isReady = await tonwebInstance.waitForTonWeb(5000);
+            this.isTonWebInitialized = isReady;
+            console.log(isReady 
+                ? "TonWeb успешно инициализирован" 
+                : "TonWeb не инициализирован за отведенное время");
+        } catch (error) {
+            console.error("Ошибка при ожидании инициализации TonWeb:", error);
+            this.isTonWebInitialized = false;
+        }
+    }
+
+    // Метод для получения баланса контракта
     async getBalance(): Promise<number> {
         try {
             console.log("Запрос реального баланса контракта");
             
             // Получаем кэшированное значение из localStorage
-            const cachedBalance = parseFloat(localStorage.getItem('cachedContractBalance') || '50');
+            const cachedBalanceStr = localStorage.getItem('cachedContractBalance');
+            const cachedBalance = cachedBalanceStr ? parseFloat(cachedBalanceStr) : 50;
+            
+            // Добавляем дополнительную проверку на NaN
+            const validCachedBalance = !isNaN(cachedBalance) ? cachedBalance : 50;
+            
             const lastFetchTime = parseInt(localStorage.getItem('lastContractFetchTime') || '0');
             const now = Date.now();
-            const FETCH_COOLDOWN = 30000; // 30 секунд между запросами
+            const FETCH_COOLDOWN = 5000; // 5 секунд между запросами
             
-            // Если не прошло 30 секунд с последнего запроса, возвращаем кэшированное значение
+            // Если не прошло 5 секунд с последнего запроса, возвращаем кэшированное значение
             if (now - lastFetchTime < FETCH_COOLDOWN) {
-                console.log("Используем кэшированный баланс контракта:", cachedBalance);
-                return cachedBalance;
+                console.log("Используем кэшированный баланс контракта:", validCachedBalance);
+                return validCachedBalance;
             }
             
-            // Пробуем получить баланс через провайдер, если он доступен и является объектом
+            // Пробуем получить баланс через TonWeb
+            const tonweb = tonwebInstance.getTonWeb();
+            
+            // Проверяем инициализацию TonWeb
+            if (!this.isTonWebInitialized) {
+                // Пробуем дождаться инициализации, если она еще не завершена
+                const isReady = await tonwebInstance.waitForTonWeb(2000);
+                this.isTonWebInitialized = isReady;
+                
+                if (!isReady || !tonwebInstance.getTonWeb()) {
+                    console.warn("TonWeb не инициализирован, используем кэшированный баланс");
+                    return validCachedBalance;
+                }
+            }
+            
+            // Преобразуем адрес в строку для безопасной передачи в TonWeb
+            const contractAddressStr = this.address.toString();
+            console.log(`Получаем баланс контракта для адреса: ${contractAddressStr}`);
+            
+            // Получаем баланс через TonWeb синглтон
+            const tonwebBalance = await tonwebInstance.getBalance(contractAddressStr);
+            if (tonwebBalance !== null) {
+                console.log(`Получен баланс контракта через TonWeb: ${tonwebBalance} TON`);
+                
+                // Сохраняем полученное значение в localStorage
+                localStorage.setItem('cachedContractBalance', tonwebBalance.toString());
+                localStorage.setItem('lastContractFetchTime', now.toString());
+                
+                return tonwebBalance;
+            }
+            
+            // Если TonWeb не сработал, и если есть TonConnect провайдер, пробуем через него
             if (this.provider && typeof this.provider === 'object' && this.provider !== null) {
                 try {
                     // Безопасное преобразование к any для проверки наличия метода
                     const providerAny = this.provider as any;
                     
-                    // Более надежная проверка на тип объекта перед использованием оператора in
+                    // Проверяем наличие метода getBalance
                     if (
                         typeof providerAny === 'object' && 
                         providerAny !== null && 
@@ -158,117 +115,106 @@ export class CoinFlipContract {
                         'getBalance' in providerAny && 
                         typeof providerAny.getBalance === 'function'
                     ) {
+                        console.log("Пробуем получить баланс через TonConnect провайдер");
                         const balance = await providerAny.getBalance(this.address);
                         const balanceInTon = Number(balance) / 1_000_000_000;
-                        console.log("Получен реальный баланс контракта через getBalance:", balanceInTon, "TON");
+                        console.log(`Получен баланс контракта через TonConnect: ${balanceInTon} TON`);
                         
                         // Сохраняем полученное значение в localStorage
                         localStorage.setItem('cachedContractBalance', balanceInTon.toString());
                         localStorage.setItem('lastContractFetchTime', now.toString());
                         
                         return balanceInTon;
+                    } else {
+                        console.log("Метод getBalance не найден в провайдере");
                     }
                 } catch (providerError) {
-                    console.error("Ошибка провайдера при получении баланса контракта:", providerError);
-                    // Если не удалось получить через провайдер, продолжаем с другими методами
+                    console.error(`Ошибка провайдера при получении баланса контракта: ${providerError}`);
                 }
             } else {
-                console.log("Провайдер не определен или не является объектом, используем HTTP API");
-            }
-            
-            // Если не удалось получить через провайдер или провайдер не определен,
-            // пробуем получить через HTTP API
-            const balanceFromHttp = await this.getBalanceViaHttp(this.address.toString());
-            if (balanceFromHttp !== null) {
-                console.log("Получен баланс контракта через HTTP API:", balanceFromHttp, "TON");
-                
-                // Сохраняем полученное значение в localStorage
-                localStorage.setItem('cachedContractBalance', balanceFromHttp.toString());
-                localStorage.setItem('lastContractFetchTime', now.toString());
-                
-                return balanceFromHttp;
+                console.log("Провайдер не определен или не является объектом");
             }
             
             // Если ни один метод не сработал, используем кэшированное значение
-            console.log("Не удалось получить баланс контракта, используем кэшированное значение");
-            return cachedBalance;
+            console.log(`Не удалось получить баланс контракта, используем кэшированное значение: ${validCachedBalance} TON`);
+            return validCachedBalance;
         } catch (error) {
             console.error("Общая ошибка при получении баланса контракта:", error);
-            return parseFloat(localStorage.getItem('cachedContractBalance') || '50');
+            
+            // Безопасное чтение кэшированного значения с проверкой на NaN
+            const cachedBalanceStr = localStorage.getItem('cachedContractBalance');
+            const cachedBalance = cachedBalanceStr ? parseFloat(cachedBalanceStr) : 50;
+            return !isNaN(cachedBalance) ? cachedBalance : 50;
         }
     }
 
     // Метод для получения баланса кошелька
     async getWalletBalance(walletAddress: string): Promise<number> {
         try {
-            console.log("Запрос реального баланса кошелька для адреса:", walletAddress);
+            console.log(`Запрос баланса кошелька для адреса: ${walletAddress}`);
             
-            // Получаем кэшированное значение из localStorage
-            const cachedBalance = parseFloat(localStorage.getItem('cachedWalletBalance') || '5');
-            const lastFetchTime = parseInt(localStorage.getItem('lastWalletFetchTime') || '0');
+            // Проверяем кэш с коротким временем жизни
+            const cacheKey = `balance_wallet_${walletAddress}`;
+            const cachedBalanceStr = localStorage.getItem(cacheKey);
+            const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
             const now = Date.now();
-            const FETCH_COOLDOWN = 30000; // 30 секунд между запросами
+            const CACHE_LIFETIME = 5000; // 5 секунд для кошелька (обновляем чаще)
             
-            // Если не прошло 30 секунд с последнего запроса, возвращаем кэшированное значение
-            if (now - lastFetchTime < FETCH_COOLDOWN) {
-                console.log("Используем кэшированный баланс кошелька:", cachedBalance);
-                return cachedBalance;
-            }
-            
-            // Создаем объект адреса кошелька
-            const walletAddr = Address.parse(walletAddress);
-            
-            // Пробуем получить баланс через провайдер, если он доступен и является объектом
-            if (this.provider && typeof this.provider === 'object' && this.provider !== null) {
-                try {
-                    // Безопасное преобразование к any для проверки наличия метода
-                    const providerAny = this.provider as any;
-                    
-                    // Более надежная проверка на тип объекта перед использованием оператора in
-                    if (
-                        typeof providerAny === 'object' && 
-                        providerAny !== null && 
-                        !Array.isArray(providerAny) && 
-                        'getBalance' in providerAny && 
-                        typeof providerAny.getBalance === 'function'
-                    ) {
-                        const balance = await providerAny.getBalance(walletAddr);
-                        const balanceInTon = Number(balance) / 1_000_000_000;
-                        console.log("Получен реальный баланс кошелька через getBalance:", balanceInTon, "TON");
-                        
-                        // Сохраняем полученное значение в localStorage
-                        localStorage.setItem('cachedWalletBalance', balanceInTon.toString());
-                        localStorage.setItem('lastWalletFetchTime', now.toString());
-                        
-                        return balanceInTon;
-                    }
-                } catch (providerError) {
-                    console.error("Ошибка провайдера при получении баланса кошелька:", providerError);
-                    // Если не удалось получить через провайдер, продолжаем с другими методами
+            // Если есть свежие данные в кэше, сразу возвращаем их
+            if (cachedBalanceStr && now - cachedTime < CACHE_LIFETIME) {
+                const balanceValue = Number(cachedBalanceStr);
+                console.log(`Используем кэшированный баланс кошелька: ${balanceValue} TON (обновлен ${Math.round((now - cachedTime) / 1000)} сек. назад)`);
+                
+                // Проверяем на NaN даже при чтении из кэша
+                if (isNaN(balanceValue)) {
+                    console.warn("Кэшированное значение баланса кошелька невалидно (NaN)");
+                } else {
+                    return balanceValue;
                 }
-            } else {
-                console.log("Провайдер не определен или не является объектом, используем HTTP API для кошелька");
             }
             
-            // Если не удалось получить через провайдер или провайдер не определен,
-            // пробуем получить через HTTP API
-            const balanceFromHttp = await this.getBalanceViaHttp(walletAddr.toString());
-            if (balanceFromHttp !== null) {
-                console.log("Получен баланс кошелька через HTTP API:", balanceFromHttp, "TON");
-                
-                // Сохраняем полученное значение в localStorage
-                localStorage.setItem('cachedWalletBalance', balanceFromHttp.toString());
-                localStorage.setItem('lastWalletFetchTime', now.toString());
-                
-                return balanceFromHttp;
+            // Получаем баланс через TonWeb синглтон
+            const tonwebBalance = await tonwebInstance.getBalance(walletAddress);
+            if (tonwebBalance !== null) {
+                // Дополнительная проверка на NaN
+                if (isNaN(tonwebBalance)) {
+                    console.error("Получено невалидное значение баланса (NaN) от TonWeb");
+                } else {
+                    console.log(`Получен баланс кошелька через TonWeb: ${tonwebBalance} TON`);
+                    
+                    // Сохраняем в localStorage как глобальный баланс и для конкретного адреса
+                    localStorage.setItem('balance_wallet', tonwebBalance.toString());
+                    localStorage.setItem(cacheKey, tonwebBalance.toString());
+                    localStorage.setItem(`${cacheKey}_time`, now.toString());
+                    
+                    return tonwebBalance;
+                }
             }
             
-            // Если ни один метод не сработал, используем кэшированное значение
-            console.log("Не удалось получить баланс кошелька, используем кэшированное значение");
-            return cachedBalance;
+            // Если не удалось получить через TonWeb, возвращаем кэшированное значение (даже устаревшее)
+            // Сначала проверяем кэш для конкретного адреса
+            if (cachedBalanceStr) {
+                const balanceValue = Number(cachedBalanceStr);
+                if (!isNaN(balanceValue)) {
+                    console.log(`Используем устаревший кэшированный баланс для адреса ${walletAddress}: ${balanceValue} TON`);
+                    return balanceValue;
+                }
+            }
+            
+            // Если нет кэша для конкретного адреса, используем глобальный кэш кошелька
+            const globalCachedBalanceStr = localStorage.getItem('balance_wallet');
+            const globalCachedBalance = globalCachedBalanceStr ? parseFloat(globalCachedBalanceStr) : 10;
+            const validGlobalCachedBalance = !isNaN(globalCachedBalance) ? globalCachedBalance : 10;
+            
+            console.log(`Не удалось получить баланс кошелька, используем глобальное кэшированное значение: ${validGlobalCachedBalance} TON`);
+            return validGlobalCachedBalance;
         } catch (error) {
-            console.error("Общая ошибка при получении баланса кошелька:", error);
-            return parseFloat(localStorage.getItem('cachedWalletBalance') || '5');
+            console.error("Ошибка при получении баланса кошелька:", error);
+            
+            // Безопасное чтение кэшированного значения с проверкой на NaN
+            const cachedBalanceStr = localStorage.getItem('balance_wallet');
+            const cachedBalance = cachedBalanceStr ? parseFloat(cachedBalanceStr) : 10;
+            return !isNaN(cachedBalance) ? cachedBalance : 10;
         }
     }
 

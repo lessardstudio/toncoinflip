@@ -21,8 +21,9 @@ const BetItem: React.FC<{  bet: number,
                         Disable=false,
                         id
                     }) => {
+    const isMobile = window.innerWidth <= 768;
     return (
-        <div className={`text-xs text-nowrap text-center p-2 rounded-xl border-color-[hsl(var(--foreground)) nowrap]
+        <div className={`text-xs text-nowrap text-center ${isMobile ? `py-5 px-3`:`p-2`} rounded-xl border-color-[hsl(var(--foreground)) nowrap]
         transition-colors ease-in-out duration-300 select-none cursor-pointer
         ${className} ${isPressed && !Disable ? `bg-[hsla(var(--main-col)/0.9)] text-[hsl(var(--main-col-bg))]
             hover:bg-[hsla(var(--main-col)/0.6)] cursor-no-drop`:
@@ -70,6 +71,7 @@ export default function BetBlock(){
                 if (connected && wallet?.account?.address) {
                     // Пробуем получить баланс кошелька через contractWrapper
                     const walletBalanceValue = await contract.getWalletBalance(wallet.account.address);
+                    localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
                     setWalletBalance(walletBalanceValue);
                     
                     // Также пробуем получить баланс через TonConnect напрямую (если это поддерживается)
@@ -92,6 +94,7 @@ export default function BetBlock(){
                                     const balanceNumber = Number(tcBalance);
                                     if (!isNaN(balanceNumber) && balanceNumber > 0) {
                                         console.log("Используем баланс из TonConnect UI:", balanceNumber);
+                                        localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
                                         setWalletBalance(balanceNumber);
                                         
                                         // Обновляем кэш
@@ -111,6 +114,7 @@ export default function BetBlock(){
                                     const balanceNumber = Number(tcBalance);
                                     if (!isNaN(balanceNumber) && balanceNumber > 0) {
                                         console.log("Используем баланс из TonConnect UI:", balanceNumber);
+                                        localStorage.setItem('balance_wallet', `${walletBalanceValue}`)
                                         setWalletBalance(balanceNumber);
                                         
                                         // Обновляем кэш
@@ -132,6 +136,7 @@ export default function BetBlock(){
                         updateMaxBet(contractBalanceValue, walletBalanceValue);
                     }, 0);
                 } else {
+                    localStorage.setItem('balance_wallet', `${0}`)
                     setWalletBalance(0);
                     updateMaxBet(contractBalanceValue, 0);
                 }
@@ -146,7 +151,7 @@ export default function BetBlock(){
         // И устанавливаем интервал для обновления
         const intervalId = setInterval(() => {
             fetchBalances();
-        }, 30000); // Обновляем каждые 30 секунд
+        }, 5000); // Обновляем каждые 5 секунд
         
         // Очищаем интервал при размонтировании компонента
         return () => clearInterval(intervalId);
