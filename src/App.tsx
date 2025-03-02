@@ -1,11 +1,9 @@
 import { TranslationContextProvider } from '@/components/lang';
-
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { Theme, TonConnectUIProvider, UIPreferences } from '@tonconnect/ui-react';
-import MainPage from './pages/main';
 import { ThemeProvider } from '@/components/theme';
 import Header from './pages/header';
-
+import MainPage from './pages/main';
 
 
 function App() {
@@ -21,12 +19,23 @@ function App() {
     theme: normalizedTheme
   } as UIPreferences;
 
+  console.log("Инициализация App");
+  
+  // Манифест для TonConnect
+  const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+  console.log("Манифест TonConnect URL:", manifestUrl);
 
   return (
     <>
-    
-      <TonConnectUIProvider language={initialLocale} manifestUrl={window.location.origin+"/tonconnect-manifest.json"}
-        uiPreferences={uiPref}>
+      <TonConnectUIProvider 
+        language={initialLocale} 
+        manifestUrl={manifestUrl}
+        uiPreferences={uiPref}
+        actionsConfiguration={{
+          // Важно указать настройки для тестовой сети
+          skipRedirectToWallet: "never"
+        }}
+      >
         <TranslationContextProvider initialLocale={initialLocale}>
           <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
                 <div className="container">

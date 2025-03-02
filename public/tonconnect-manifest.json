@@ -1,5 +1,9 @@
 {
-    "url": "http://coinflip.lessardstudio.ru/",
-    "name": "TON Coinflip",
-    "iconUrl": "https://ton.vote/logo.png"
+    "url": "http://localhost:5173",
+    "name": "TonFlip",
+    "iconUrl": "https://ton.org/download/ton_symbol.png",
+    "termsOfUseUrl": "http://localhost:5173/terms",
+    "privacyPolicyUrl": "http://localhost:5173/privacy",
+    "manifestVersion": 1,
+    "version": "1.0.0"
 }

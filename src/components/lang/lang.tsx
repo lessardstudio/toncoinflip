@@ -82,6 +82,8 @@ export const en : ILang ={
   choselang: 'Chose language',
   themechose: 'Chose theme',
   connectWallet: 'Connect TON wallet',
+  bet1:'TON',
+  bet2:'NOT',
 };
 
 export const ru: ILang ={
@@ -138,4 +140,6 @@ export const ru: ILang ={
   choselang: 'Выбери язык',
   themechose: 'Выбери тему',
   connectWallet: 'Подключить кошелек TON',
+  bet1:'TON',
+  bet2:'NOT',
 };

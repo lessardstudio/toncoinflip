@@ -1,3 +1,8 @@
+import { Buffer } from 'buffer';
+
+// Полифил для Buffer в браузере
+window.Buffer = window.Buffer || Buffer;
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/index.css'
