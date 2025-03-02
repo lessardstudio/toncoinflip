@@ -68,10 +68,10 @@ class TonWebInstance {
                     try {
                         await new Promise<void>((resolve, reject) => {
                             const script = document.createElement('script');
-                            script.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
+                            script.src = 'https://unpkg.com/tonweb@0.0.62/dist/tonweb.js';
                             script.onload = () => {
-                                console.log('TonWeb успешно загружен через скрипт');
                                 if (window.TonWeb) {
+                                    console.log('TonWeb успешно загружен из:', script.src);
                                     this.TonWebLib = window.TonWeb;
                                     resolve();
                                 } else {
@@ -89,6 +89,11 @@ class TonWebInstance {
                         throw new Error('TonWeb недоступен. Проверьте подключение к интернету и попробуйте перезагрузить страницу.');
                     }
                 }
+            }
+            
+            // Проверяем наличие TonWebLib перед созданием экземпляра
+            if (!this.TonWebLib) {
+                throw new Error('TonWeb библиотека не инициализирована');
             }
             
             // Выбираем endpoint в зависимости от сети
@@ -161,13 +166,38 @@ class TonWebInstance {
 
     public async waitForTonWeb(timeout: number = 5000): Promise<boolean> {
         await this.ensureInitialized();
+        
+        // Если TonWeb уже инициализирован, возвращаем true
+        if (this.isTonWebReady()) {
+            console.log('TonWeb уже готов и доступен');
+            return true;
+        }
+        
+        console.log('TonWeb загружается, ожидаем инициализации...');
+        
         const startTime = Date.now();
         while (Date.now() - startTime < timeout) {
             if (this.isTonWebReady()) {
+                console.log('TonWeb успешно инициализирован');
                 return true;
             }
+            // Пауза 100мс перед следующей проверкой
             await new Promise(resolve => setTimeout(resolve, 100));
         }
+        
+        // Еще одна попытка инициализации, если тайм-аут
+        if (!this.isTonWebReady()) {
+            console.log('Повторная попытка инициализации TonWeb...');
+            this.initializationPromise = this.initializeTonWeb();
+            await this.initializationPromise;
+            
+            if (this.isTonWebReady()) {
+                console.log('TonWeb успешно инициализирован после повторной попытки');
+                return true;
+            }
+        }
+        
+        console.warn('TonWeb не инициализирован после ожидания');
         return false;
     }
 
