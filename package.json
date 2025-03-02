@@ -41,7 +41,8 @@
     "ton": "^13.9.0",
     "tonconnect-ui-react": "^0.0.1",
     "tonweb": "^0.0.66",
-    "vaul": "^1.0.0"
+    "vaul": "^1.0.0",
+    "sonner": "^1.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
