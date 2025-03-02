@@ -265,99 +265,122 @@ class TonWebInstance {
     // Метод для получения баланса с проверкой на ограничение запросов и кэшированием
     public async getBalance(address: string): Promise<number | null> {
         try {
-            await this.ensureInitialized();
-            if (!this.tonweb) {
-                console.warn('TonWeb не инициализирован');
+            // Проверяем, корректно ли инициализирован TonWeb
+            if (!this.isTonWebReady()) {
+                console.warn('TonWeb не инициализирован, невозможно получить баланс');
                 return null;
             }
-
-            // Очищаем адрес от специальных символов
-            const cleanAddress = address.replace(/[^a-zA-Z0-9_-]/g, '_');
-            console.log(`Получение баланса для адреса: ${cleanAddress}`);
-
+            
+            // Нормализуем формат адреса для кэширования
+            const normalizedAddress = address.replace(/[:\/]/g, '_');
+            console.log('Получение баланса для адреса:', normalizedAddress);
+            
             // Проверяем кэш
             const now = Date.now();
-            const cachedData = this.balanceCache.get(cleanAddress);
-            if (cachedData && (now - cachedData.timestamp) < this.balanceCacheTime) {
-                console.log(`Используем кэшированный баланс для ${cleanAddress}`);
+            const cachedData = this.balanceCache.get(normalizedAddress);
+            
+            if (cachedData && now - cachedData.timestamp < this.balanceCacheTime) {
+                console.log('Используем кэшированный баланс для', normalizedAddress);
                 return cachedData.balance;
             }
-
-            // Пытаемся получить баланс сразу через fetch API, пропуская TonWeb
+            
+            // Сначала пробуем запросить через API
             try {
-                const endpoint = this.isTestnet
-                    ? 'https://testnet.toncenter.com/api/v2/getAddressBalance'
-                    : 'https://toncenter.com/api/v2/getAddressBalance';
+                console.log('Запрос баланса через API для', address);
                 
-                const url = new URL(endpoint);
-                url.searchParams.append('address', address);
+                // Форматируем адрес для API запроса
+                const apiAddress = address.replace(/_/g, '/');
                 
-                if (this.apiKey) {
-                    url.searchParams.append('api_key', this.apiKey);
-                }
-                
-                console.log(`Запрос баланса через API для ${address}`);
-                const response = await fetch(url.toString());
-                
-                if (response.status === 429) {
-                    // Слишком много запросов
-                    console.warn('Получено ограничение запросов (429) при получении баланса');
-                    // Если есть кэшированное значение, вернем его
-                    return cachedData ? cachedData.balance : 0;
-                }
+                const response = await fetch(
+                    `${this.isTestnet ? 'https://testnet.toncenter.com' : 'https://toncenter.com'}/api/v2/getAddressBalance?` +
+                    new URLSearchParams({
+                        'address': apiAddress,
+                        'api_key': this.apiKey || ''
+                    }),
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    }
+                );
                 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data && data.ok && data.result) {
-                        // Конвертируем из наноТОН в ТОН
-                        const balanceNumber = Number(data.result) / 1e9;
-                        console.log(`Получен баланс через API: ${balanceNumber} TON`);
+                    if (data && data.result) {
+                        const balanceNano = data.result;
+                        const balance = await this.fromNano(balanceNano);
                         
                         // Кэшируем результат
-                        this.balanceCache.set(cleanAddress, {
-                            balance: balanceNumber,
+                        this.balanceCache.set(normalizedAddress, {
+                            balance: balance,
                             timestamp: now
                         });
-                        return balanceNumber;
+                        
+                        console.log('Получен баланс через API:', balance, 'TON');
+                        return balance;
+                    }
+                } else {
+                    console.warn('Ошибка API при запросе баланса:', response.status, response.statusText);
+                }
+            } catch (apiError) {
+                console.warn('Ошибка при запросе баланса через API:', apiError);
+            }
+            
+            // Если API не сработал, используем TonWeb напрямую
+            try {
+                console.log('Попытка получить баланс через TonWeb для', address);
+                
+                // Создаем экземпляр адреса TonWeb разными способами
+                let tonAddress;
+                
+                try {
+                    // Пробуем создать адрес напрямую
+                    tonAddress = new this.TonWebLib.utils.Address(address);
+                } catch (addressError) {
+                    try {
+                        // Пробуем без префикса EQ, если он есть
+                        if (address.startsWith('EQ')) {
+                            tonAddress = new this.TonWebLib.utils.Address(address.substring(2));
+                        } else {
+                            // Преобразуем формат с _ на /
+                            const fixedAddress = address.replace(/_/g, '/');
+                            tonAddress = new this.TonWebLib.utils.Address(fixedAddress);
+                        }
+                    } catch (fixedAddressError) {
+                        // Если ни один из способов не сработал, используем кэшированное значение
+                        console.error('Не удалось создать адрес для запроса баланса:', fixedAddressError);
+                        return null;
                     }
                 }
-            } catch (fetchError) {
-                console.warn('Ошибка при получении баланса через API:', fetchError);
-            }
-
-            // Если fetch API не помог, пробуем через TonWeb как запасной вариант
-            try {
-                console.log(`Попытка получить баланс через TonWeb для ${address}`);
-                const balance = await this.tonweb.getBalance(address);
-                if (balance !== undefined) {
-                    // Конвертируем из наноТОН в ТОН
-                    const balanceNumber = typeof balance === 'string' 
-                        ? Number(balance) / 1e9 
-                        : balance / 1e9;
-                    
-                    console.log(`Получен баланс через TonWeb: ${balanceNumber} TON`);
-                    
-                    this.balanceCache.set(cleanAddress, {
-                        balance: balanceNumber,
-                        timestamp: now
-                    });
-                    return balanceNumber;
-                }
+                
+                // Получаем баланс
+                const balanceNano = await this.tonweb.getBalance(tonAddress);
+                const balance = await this.fromNano(balanceNano);
+                
+                // Кэшируем результат
+                this.balanceCache.set(normalizedAddress, {
+                    balance: balance,
+                    timestamp: now
+                });
+                
+                console.log('Получен баланс кошелька через TonWeb:', balance, 'TON');
+                return balance;
             } catch (tonwebError) {
-                console.warn('Ошибка при получении баланса через TonWeb:', tonwebError);
+                console.error('Ошибка при получении баланса через TonWeb:', tonwebError);
+                
+                // Если есть кэшированное значение, возвращаем его, даже если оно устарело
+                if (cachedData) {
+                    console.warn('Используем устаревший кэшированный баланс:', cachedData.balance);
+                    return cachedData.balance;
+                }
+                
+                // Если всё не удалось, возвращаем заглушку
+                return 10; // Заглушка для тестирования
             }
-            
-            // Если все методы не сработали и есть кэшированное значение, возвращаем его
-            if (cachedData) {
-                console.log(`Используем устаревший кэшированный баланс для ${cleanAddress}`);
-                return cachedData.balance;
-            }
-            
-            // В крайнем случае возвращаем фиксированное значение
-            return 10; // Значение по умолчанию, если все методы не сработали
         } catch (error) {
-            console.error('Ошибка при получении баланса:', error);
-            return 10; // Значение по умолчанию в случае ошибки
+            console.error('Критическая ошибка при получении баланса:', error);
+            return null;
         }
     }
 
@@ -378,12 +401,28 @@ class TonWebInstance {
         return this.TonWebLib.utils.toNano(amount);
     }
 
-    public async fromNano(amount: string): Promise<number> {
-        await this.ensureInitialized();
-        if (!this.TonWebLib) {
-            throw new Error('TonWeb не инициализирован');
+    public async fromNano(amount: string | number): Promise<number> {
+        try {
+            if (!this.tonweb) {
+                return Number(amount) / 1e9;
+            }
+            
+            if (typeof amount === 'number') {
+                amount = amount.toString();
+            }
+            
+            try {
+                const fromNanoResult = await this.tonweb.utils.fromNano(amount);
+                return parseFloat(fromNanoResult);
+            } catch (error) {
+                console.warn('Ошибка при использовании tonweb.utils.fromNano:', error);
+                // Ручное преобразование как резервный вариант
+                return Number(amount) / 1e9;
+            }
+        } catch (error) {
+            console.error('Ошибка в методе fromNano:', error);
+            return Number(amount) / 1e9;
         }
-        return Number(this.TonWebLib.utils.fromNano(amount));
     }
 }
 
