@@ -21,7 +21,9 @@ export class CoinFlipContract {
     constructor(address: string, provider: ContractProvider) {
         console.log("Инициализация CoinFlipContract с адресом:", address);
         this.provider = provider;
-        this.address = Address.parse(address);
+        // Заменяем символы / на _ в адресе
+        const normalizedAddress = address.replace(/\//g, '_');
+        this.address = Address.parse(normalizedAddress);
         
         // Проверяем доступность TonWeb через синглтон (синхронная проверка)
         if (tonwebInstance.isTonWebReady()) {

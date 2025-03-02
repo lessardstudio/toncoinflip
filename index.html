@@ -11,31 +11,41 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>tCoinFlip</title>
-    <!-- Скрипт TonWeb (пробуем несколько источников) -->
+    <!-- Загрузка TonWeb -->
     <script>
-      // Функция для загрузки TonWeb из разных источников
       (function loadTonWeb() {
-        // Пытаемся сначала загрузить из node_modules
-        var script = document.createElement('script');
-        script.src = '/node_modules/tonweb/dist/tonweb.js';
-        script.onerror = function() {
-          console.warn('Не удалось загрузить TonWeb из node_modules, пробуем локальную версию...');
-          // Затем пробуем локальную версию из public
-          var localScript = document.createElement('script');
-          localScript.src = '/tonweb.js'; // Файл в public папке
-          localScript.onerror = function() {
-            console.warn('Не удалось загрузить локальную версию TonWeb, пробуем CDN...');
-            // Если все не удалось, загружаем из CDN
-            var cdnScript = document.createElement('script');
-            cdnScript.src = 'https://unpkg.com/tonweb@0.0.66/dist/tonweb.js';
-            cdnScript.onerror = function() {
-              console.error('Не удалось загрузить TonWeb ни из одного источника!');
-            };
-            document.head.appendChild(cdnScript);
-          };
-          document.head.appendChild(localScript);
+        var loadScript = function(src) {
+          return new Promise((resolve, reject) => {
+            var script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
         };
-        document.head.appendChild(script);
+
+        // Массив источников для загрузки TonWeb в порядке приоритета
+        var sources = [
+          'https://cdn.jsdelivr.net/npm/tonweb@0.0.62/dist/tonweb.js',
+          'https://unpkg.com/tonweb@0.0.62/dist/tonweb.js',
+          '/tonweb.js'
+        ];
+
+        // Пробуем загрузить из каждого источника последовательно
+        async function tryLoadFromSources() {
+          for (let src of sources) {
+            try {
+              await loadScript(src);
+              console.log('TonWeb успешно загружен из:', src);
+              return; // Выходим, если загрузка успешна
+            } catch (err) {
+              console.warn('Не удалось загрузить TonWeb из:', src);
+            }
+          }
+          console.error('Не удалось загрузить TonWeb ни из одного источника');
+        }
+
+        tryLoadFromSources();
       })();
     </script>
   </head>
