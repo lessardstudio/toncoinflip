@@ -453,11 +453,6 @@ export class TonWebHelper {
             return null;
         }
 
-        // Функция для преобразования base64url в base64
-        const base64UrlToBase64 = (base64url: string): string => {
-            // Заменяем символы base64url на стандартные base64 символы
-            return base64url.replace(/-/g, '+').replace(/_/g, '/');
-        };
 
         // Нормализуем адрес для кэша
         const normalizedAddress = address.trim();
