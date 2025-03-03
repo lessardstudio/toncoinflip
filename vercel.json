@@ -1,0 +1,42 @@
+{
+  "framework": "vite",
+  "buildCommand": "yarn build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/tonapi/:path*",
+      "destination": "https://tonapi.io/v1/:path*"
+    },
+    {
+      "source": "/toncenter/:path*",
+      "destination": "https://toncenter.com/api/v2/:path*"
+    },
+    {
+      "source": "/testnet-toncenter/:path*",
+      "destination": "https://testnet.toncenter.com/api/v2/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-Requested-With, Content-Type, Accept, X-API-Key"
+        }
+      ]
+    }
+  ]
+} 

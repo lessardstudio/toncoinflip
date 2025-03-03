@@ -235,7 +235,21 @@ export class CoinFlipContract {
             }
             
             // Преобразуем адрес в строку для безопасной передачи в TonWeb
-            const contractAddressStr = this.contract.address.toString();
+            let contractAddressStr = '';
+            try {
+                contractAddressStr = this.contract.address.toString();
+            } catch (e) {
+                // Если не удалось преобразовать адрес в строку, используем исходный адрес
+                contractAddressStr = this.contract.address || '';
+                console.warn('Не удалось преобразовать адрес контракта в строку, используем исходный адрес');
+            }
+
+            // Проверяем, что адрес не пустой
+            if (!contractAddressStr) {
+                console.warn('Адрес контракта пустой, используем адрес из окружения');
+                contractAddressStr = import.meta.env.VITE_CONTRACT_ADDRESS || '';
+            }
+
             console.log(`Получаем баланс контракта для адреса: ${contractAddressStr}`);
             
             // Получаем баланс через TonWeb синглтон
