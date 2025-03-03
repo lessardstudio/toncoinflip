@@ -453,8 +453,7 @@ export class TonWebHelper {
             return null;
         }
 
-
-        // Нормализуем адрес для кэша
+        // Нормализуем адрес для кэша (убираем пробелы)
         const normalizedAddress = address.trim();
         
         // Проверяем кэш
@@ -465,8 +464,6 @@ export class TonWebHelper {
         }
 
         try {
-            console.log(`Попытка получить баланс через TonWeb для ${address}`);
-            
             // Проверяем инициализацию TonWeb
             if (!this.isTonWebReady()) {
                 console.warn('TonWeb не инициализирован для запроса баланса');
@@ -474,118 +471,77 @@ export class TonWebHelper {
                 
                 if (!this.isTonWebReady()) {
                     console.error('TonWeb не удалось инициализировать для запроса баланса');
-                    return null;
+                    return 10; // Возвращаем значение по умолчанию
                 }
             }
             
-            // Создаем адрес в формате TonWeb
+            // Получаем баланс через кошелек TON для верного адреса
             let tonAddress;
+            let isAddressValid = false;
             
-            // Используем API для полного обхода проблем с адресами
+            // Подход #1: Пробуем использовать исходный адрес
             try {
-                // Форматируем адрес с учётом специфики API
-                const apiAddress = address.replace(/_/g, '/');
-                
-                // Запрашиваем баланс через HTTP API
-                const endpoint = this.isTestnet ? 'https://testnet.toncenter.com' : 'https://toncenter.com';
-                const url = `${endpoint}/api/v2/getAddressBalance?address=${encodeURIComponent(apiAddress)}`;
-                
-                // Добавляем API ключ, если он есть
-                const headers: HeadersInit = { 'Accept': 'application/json' };
-                if (this.apiKey) {
-                    headers['X-API-Key'] = this.apiKey;
+                console.log(`Попытка создать адрес напрямую: ${normalizedAddress}`);
+                tonAddress = new this.TonWebLib.utils.Address(normalizedAddress);
+                isAddressValid = true;
+            } catch (directError) {
+                console.warn(`Не удалось создать адрес напрямую: ${directError}`);
+            }
+            
+            // Подход #2: Если адрес содержит подчеркивания, заменяем их на слэши
+            if (!isAddressValid && normalizedAddress.includes('_')) {
+                try {
+                    const fixedAddress = normalizedAddress.replace(/_/g, '/');
+                    console.log(`Попытка создать адрес со слэшами: ${fixedAddress}`);
+                    tonAddress = new this.TonWebLib.utils.Address(fixedAddress);
+                    isAddressValid = true;
+                } catch (replacedError) {
+                    console.warn(`Не удалось создать адрес со слэшами: ${replacedError}`);
                 }
+            }
+            
+            // Подход #3: используем адрес из окружения, если это тестовая сеть
+            if (!isAddressValid && this.isTestnet) {
+                const defaultAddress = import.meta.env.VITE_CONTRACT_ADDRESS || '';
+                if (defaultAddress) {
+                    try {
+                        console.log(`Попытка использовать адрес из окружения: ${defaultAddress}`);
+                        tonAddress = new this.TonWebLib.utils.Address(defaultAddress);
+                        isAddressValid = true;
+                    } catch (envError) {
+                        console.warn(`Не удалось создать адрес из окружения: ${envError}`);
+                    }
+                }
+            }
+            
+            // Если мы не смогли создать адрес, возвращаем значение по умолчанию
+            if (!isAddressValid) {
+                console.warn('Не удалось создать корректный адрес, возвращаем значение по умолчанию');
+                return 10;
+            }
+            
+            // Запрашиваем баланс
+            console.log(`Запрос баланса для адреса: ${tonAddress.toString()}`);
+            const balanceNano = await this.tonweb.getBalance(tonAddress);
+            
+            if (balanceNano !== null && balanceNano !== undefined) {
+                // Преобразуем из наноТОН в TON
+                const balance = await this.fromNano(balanceNano);
                 
-                const response = await fetch(url, { 
-                    method: 'GET',
-                    headers
+                // Кэшируем результат
+                this.balanceCache.set(normalizedAddress, {
+                    balance,
+                    timestamp: Date.now()
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.result) {
-                        // Преобразуем из наноТОН в TON
-                        const balance = await this.fromNano(data.result);
-                        
-                        // Кэшируем результат
-                        this.balanceCache.set(normalizedAddress, {
-                            balance,
-                            timestamp: Date.now()
-                        });
-                        
-                        console.log(`Получен баланс через API для ${normalizedAddress}: ${balance} TON`);
-                        return balance;
-                    }
-                } else {
-                    console.warn(`Ошибка API при запросе баланса: ${response.status} ${response.statusText}`);
-                }
-            } catch (apiError) {
-                console.warn('Не удалось получить баланс через API:', apiError);
+                console.log(`Получен баланс: ${balance} TON`);
+                return balance;
+            } else {
+                console.warn('Получен пустой баланс, возвращаем значение по умолчанию');
+                return 10;
             }
-            
-            // Если не получилось через API, пробуем через TonWeb
-            try {
-                // В случае, если у нас есть предопределенный адрес для тестовой среды
-                if (this.isTestnet && import.meta.env.VITE_TEST_CONTRACT_ADDRESS) {
-                    const testAddress = import.meta.env.VITE_TEST_CONTRACT_ADDRESS;
-                    console.log(`Используем тестовый адрес: ${testAddress}`);
-                    
-                    try {
-                        tonAddress = new this.TonWebLib.utils.Address(testAddress);
-                    } catch (testError) {
-                        console.warn(`Не удалось создать адрес из тестового значения:`, testError);
-                    }
-                }
-                
-                // Если тестовый адрес не сработал, пробуем оригинальный
-                if (!tonAddress) {
-                    try {
-                        // Пробуем создать адрес напрямую
-                        tonAddress = new this.TonWebLib.utils.Address(address);
-                        console.log('Адрес успешно создан напрямую');
-                    } catch (directError) {
-                        console.warn(`Не удалось создать адрес напрямую:`, directError);
-                        
-                        try {
-                            // Заменяем подчеркивания на слэши
-                            const fixedAddress = address.replace(/_/g, '/');
-                            tonAddress = new this.TonWebLib.utils.Address(fixedAddress);
-                            console.log('Адрес успешно создан после замены символов');
-                        } catch (fixedError) {
-                            console.warn(`Не удалось создать адрес после исправления:`, fixedError);
-                            return null;
-                        }
-                    }
-                }
-                
-                if (tonAddress) {
-                    // Запрашиваем баланс
-                    const balanceValue = await this.tonweb.getBalance(tonAddress);
-                    if (balanceValue) {
-                        // Преобразуем из наноТОН в TON
-                        const balance = await this.fromNano(balanceValue);
-                        
-                        // Кэшируем результат
-                        this.balanceCache.set(normalizedAddress, {
-                            balance,
-                            timestamp: Date.now()
-                        });
-                        
-                        console.log(`Получен баланс через TonWeb для ${normalizedAddress}: ${balance} TON`);
-                        return balance;
-                    } else {
-                        console.warn('TonWeb вернул пустое значение баланса');
-                    }
-                }
-            } catch (tonwebError) {
-                console.error('Ошибка при получении баланса через TonWeb:', tonwebError);
-            }
-            
-            // Если ничего не сработало, возвращаем значение по умолчанию
-            console.warn('Невозможно получить баланс, возвращаем значение по умолчанию 10 TON');
-            return 10;
         } catch (error) {
-            console.error('Критическая ошибка при получении баланса:', error);
+            console.error('Ошибка при получении баланса:', error);
             return 10; // Значение по умолчанию
         }
     }
