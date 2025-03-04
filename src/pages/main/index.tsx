@@ -86,7 +86,8 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
                     // const hash = beginCell().store(storeMessage(tx as any)).endCell().hash().toString('hex');
                     console.log(`Transaction: ${extHash} ${txHash} `);
                     console.log(`Transaction LT: ${tx.lt.toString()}`);
-                    return {txHash: extHash, lt: tx.lt.toString(), inMsg: inMsg};
+                    const lt = tx.lt.toString();
+                    return {txHash: extHash, lt: lt, inMsg: inMsg};
                 }
             }
         }
@@ -228,7 +229,7 @@ export default function MainPage() {
                 limit: 3,
                 hash: txHash.trim(),
                 archival: true,
-                to_lt: lt
+                to_lt: 0
             };
 
             // Добавляем lt только если он не пустой
@@ -355,8 +356,8 @@ export default function MainPage() {
             
             // Получаем хэш транзакции по BOC
             if (result.boc) {
-                const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
                 setTxLoading(true);
+                const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
                 const res = await checkTransaction(tx.txHash, wallet.account.address.toString(), '');
                 if (res.status === 'win' || res.status === 'lost') {
                     tonConnectUI.closeModal();
