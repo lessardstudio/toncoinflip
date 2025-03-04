@@ -228,7 +228,7 @@ export default function MainPage() {
                 limit: 3,
                 hash: txHash.trim(),
                 archival: true,
-                to_lt: 0
+                to_lt: lt
             };
 
             // Добавляем lt только если он не пустой
@@ -355,8 +355,8 @@ export default function MainPage() {
             
             // Получаем хэш транзакции по BOC
             if (result.boc) {
-                setTxLoading(true);
                 const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
+                setTxLoading(true);
                 const res = await checkTransaction(tx.txHash, wallet.account.address.toString(), '');
                 if (res.status === 'win' || res.status === 'lost') {
                     tonConnectUI.closeModal();
