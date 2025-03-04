@@ -19,11 +19,7 @@ function App() {
     theme: normalizedTheme
   } as UIPreferences;
 
-  console.log("Инициализация App");
-  
-  // Манифест для TonConnect
-  const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
-  console.log("Манифест TonConnect URL:", manifestUrl);
+  const manifestUrl = 'https://toncoinflip.vercel.app/tonconnect-manifest.json';
 
   return (
     <>
@@ -31,10 +27,12 @@ function App() {
         language={initialLocale} 
         manifestUrl={manifestUrl}
         uiPreferences={uiPref}
-        actionsConfiguration={{
-          // Важно указать настройки для тестовой сети
-          skipRedirectToWallet: "never"
-        }}
+        actionsConfiguration={
+          {
+            modals:['before', 'error'],
+            notifications:['before', 'success', 'error'],
+          }
+        }
       >
         <TranslationContextProvider initialLocale={initialLocale}>
           <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">

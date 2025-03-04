@@ -1,826 +1,512 @@
-/**
- * Синглтон для работы с TonWeb
- * Позволяет создать и переиспользовать экземпляр TonWeb в разных частях приложения
- */
+import TonWeb from 'tonweb';
 
-// TonWeb в сборке Vite может требовать использования ESM импорта.
-// Определяем интерфейс для TonWeb
-//interface ITonWeb {
-//    new(provider: any): any;
-//    HttpProvider?: any;
-//}
+type TonWebType = typeof TonWeb;
 
-// Определяем тип для window с TonWeb
-declare global {
-    interface Window {
-        TonWeb: any;
-    }
+interface TransactionInfo {
+    address: string;
+    utime: number;
+    hash: string;
+    lt: string;
+    amount: string;
+    from?: string;
+    to?: string;
+    fee: string;
 }
 
-// Интерфейс для кэшированного баланса
-interface CachedBalance {
-    balance: number;
-    timestamp: number;
-}
+class TonWebInstance {
+    [x: string]: any;
+    private static instance: TonWebInstance | null = null;
+    private readonly tonweb: any;
+    private readonly provider: any;
+    private readonly isTestnet: boolean;
 
-export class TonWebHelper {
-    private static instance: TonWebHelper | null = null;
-    private TonWebLib: any = null;
-    private tonweb: any = null;
-    private isTestnet: boolean = false;
-    private apiKey: string | null = null;
-    private initializationPromise: Promise<void> | null = null;
-    private initializationStatus: 'idle' | 'pending' | 'success' | 'error' = 'idle';
-    private loadedScript: HTMLScriptElement | null = null;
-    private rateLimitedUntil: number = 0;
-    private maxRateLimitWait: number = 10000; // 10 секунд максимальная задержка
-    private balanceCache: Map<string, CachedBalance> = new Map();
-    private balanceCacheTime: number = 60000; // 1 минута
+    private constructor() {
+        try {
+            this.isTestnet = import.meta.env.VITE_IS_TESTNET === 'true';
+            
+            const apiKey = import.meta.env.VITE_TONCENTER_API_KEY;
 
-    /**
-     * Получить единственный экземпляр TonWebHelper (Singleton)
-     */
-    public static getInstance(): TonWebHelper {
-        if (!TonWebHelper.instance) {
-            TonWebHelper.instance = new TonWebHelper();
-        }
-        return TonWebHelper.instance;
-    }
-    
-    /**
-     * Проверяет, готов ли TonWeb к использованию
-     */
-    public isTonWebReady(): boolean {
-        return !!this.tonweb && !!this.TonWebLib;
-    }
-    
-    /**
-     * Проверяет доступность TonWeb в любом контексте
-     */
-    public static isTonWebAvailable(): boolean {
-        if (typeof window !== 'undefined') {
-            // Проверяем наличие в окне
-            if ((window as any).TonWeb) {
-                return true;
+            /* console.log('Environment variables:', {
+                VITE_IS_TESTNET: import.meta.env.VITE_IS_TESTNET,
+                VITE_TONCENTER_API_KEY: apiKey ? 'exists' : 'missing'
+            }); */
+
+            // Добавляем слэш в конце URL если его нет
+            const baseUrl = this.isTestnet 
+                ? 'https://testnet.toncenter.com/api/v2/'
+                : 'https://toncenter.com/api/v2/';
+            
+            const endpoint = `${baseUrl}jsonRPC`;
+            /* console.log('Инициализация TonWeb:', {
+                isTestnet: this.isTestnet,
+                endpoint,
+                hasApiKey: !!import.meta.env.VITE_TONCENTER_API_KEY
+            }); */
+
+            if (!apiKey) {
+                console.warn('API ключ не найден в переменных окружения');
             }
+
+            const options = {
+                apiKey: apiKey || '',
+                retry: true,
+                timeout: 10000
+            };
+            
+            const TonWebLib = TonWeb as TonWebType;
+            this.provider = new TonWebLib.HttpProvider(endpoint, options);
+            
+            // Добавляем обработчик ошибок для провайдера
+            this.provider.sendImpl = async (apiUrl: string, request: any) => {
+                try {
+                    // Форматируем параметры запроса
+                    if (request.method === 'getAddressBalance' && request.params?.address) {
+                        // Убеждаемся, что адрес в правильном формате
+                        const address = request.params.address;
+                        if (typeof address === 'string') {
+                            // Если адрес начинается с EQ или UQ, конвертируем его
+                            if (address.startsWith('EQ') || address.startsWith('UQ')) {
+                                const normalizedAddress = this.normalizeAddress(address);
+                                request.params.address = normalizedAddress;
+                            }
+                        }
+                    }
+
+                    /* console.log('Отправка запроса к TON Center:', {
+                        apiUrl,
+                        method: request.method,
+                        params: request.params
+                    }); */
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': options.apiKey
+                        },
+                        body: JSON.stringify(request)
+                    });
+
+                    if (!response.ok) {
+                        console.error('Ошибка ответа от TON Center:', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            request
+                        });
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    if (result.error) {
+                        console.error('Ошибка в ответе TON Center:', {
+                            error: result.error,
+                            request
+                        });
+                        throw new Error(result.error.message || 'Unknown API error');
+                    }
+
+                    /* console.log('Успешный ответ от TON Center:', {
+                        method: request.method,
+                        result
+                    }); */
+
+                    return result;
+                } catch (error) {
+                    console.error('Ошибка при отправке запроса к TON Center:', {
+                        apiUrl,
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                        request
+                    });
+                    throw error;
+                }
+            };
+
+            this.tonweb = new TonWebLib(this.provider);
+            // console.log('TonWeb успешно инициализирован');
+        } catch (error) {
+            console.error('Ошибка при инициализации TonWeb:', {
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            throw error;
         }
-        
-        // Проверяем наличие у singleton экземпляра
-        if (TonWebHelper.instance && TonWebHelper.instance.isTonWebReady()) {
-            return true;
-        }
-        
-        return false;
     }
     
-    /**
-     * Возвращает сырой объект TonWeb для прямого доступа к API
-     */
-    public getTonWeb(): any {
-        if (!this.isTonWebReady()) {
-            console.warn('getTonWeb: TonWeb не инициализирован, возвращаем null');
-            return null;
+    public static getInstance(): TonWebInstance {
+        if (!TonWebInstance.instance) {
+            TonWebInstance.instance = new TonWebInstance();
         }
+        return TonWebInstance.instance;
+    }
+
+    public getTonWeb(): any {
         return this.tonweb;
     }
     
-    /**
-     * Возвращает библиотеку TonWeb для статического доступа
-     */
-    public getTonWebLib(): any {
-        if (!this.TonWebLib) {
-            console.warn('getTonWebLib: TonWeb библиотека не загружена, возвращаем null');
-            return null;
-        }
-        return this.TonWebLib;
+    public getProvider(): any {
+        return this.provider;
     }
     
-    /**
-     * Возвращает статус инициализации TonWeb
-     */
-    public getInitializationStatus(): 'idle' | 'pending' | 'success' | 'error' {
-        return this.initializationStatus;
-    }
-    
-    /**
-     * Возвращает промис инициализации TonWeb или создает новый
-     */
-    public async ensureInitialized(): Promise<void> {
-        if (this.initializationPromise) {
-            try {
-                await this.initializationPromise;
-            } catch (error) {
-                console.error('Ошибка в существующем промисе инициализации:', error);
-                // Сбрасываем промис, чтобы можно было повторить инициализацию
-                this.initializationPromise = null;
-                this.initializationStatus = 'error';
-            }
-        }
-        
-        if (!this.initializationPromise) {
-            this.initializationPromise = this.initializeTonWeb();
-        }
-        
-        return this.initializationPromise;
+    public isInTestnet(): boolean {
+        return this.isTestnet;
     }
 
-    private constructor() {
-        // Инициализируем базовые настройки
-        this.isTestnet = this.getIsTestnet();
-        this.apiKey = this.getApiKey();
-        
-        // Если в браузере, сразу пробуем загрузить TonWeb в DOM
-        if (typeof document !== 'undefined') {
-            try {
-                this.loadTonWebInDOM().catch(error => {
-                    console.warn('Ошибка при автоматической загрузке TonWeb в DOM:', error);
-                });
-            } catch (error) {
-                console.warn('Не удалось запустить автоматическую загрузку TonWeb:', error);
-            }
-        }
-        
-        // Запускаем асинхронную инициализацию
-        this.initializationPromise = this.initializeTonWeb();
-        
-        // Бэкап: запускаем через 3 секунды повторную инициализацию, если первая не завершилась
-        setTimeout(() => {
-            if (this.initializationStatus !== 'success' && this.initializationStatus !== 'pending') {
-                console.warn('Автоматическая инициализация не завершилась, запускаем повторную...');
-                // Сбрасываем состояние
-                this.initializationPromise = null;
-                // Повторно запускаем
-                this.initializationPromise = this.initializeTonWeb();
-            }
-        }, 3000);
-    }
-
-    /**
-     * Инициализирует TonWeb, загружая библиотеку и создавая экземпляр
-     */
-    private async initializeTonWeb(): Promise<void> {
-        // Если уже инициализировано, возвращаем сразу
-        if (this.isTonWebReady()) {
-            this.initializationStatus = 'success';
-            return;
-        }
-        
-        this.initializationStatus = 'pending';
-        
+    private base64UrlToHex(base64Url: string): string {
         try {
-            // Если TonWeb уже доступен в окне, используем его
-            if (typeof window !== 'undefined' && (window as any).TonWeb) {
-                console.log('Используем TonWeb из глобального объекта window');
-                this.TonWebLib = (window as any).TonWeb;
+            // Убираем префикс EQ или UQ если есть
+            const cleanBase64 = base64Url.replace(/^(EQ|UQ)/, '');
+            
+            // Заменяем URL-safe символы на стандартные base64
+            let base64 = cleanBase64.replace(/-/g, '+').replace(/_/g, '/');
+            
+            // Добавляем padding
+            while (base64.length % 4) {
+                base64 += '=';
+            }
+            
+            // Декодируем base64 в буфер
+            const buffer = Buffer.from(base64, 'base64');
+            
+            // Конвертируем в hex
+            let hex = buffer.toString('hex').toLowerCase();
+            
+            // Обрезаем или дополняем до 64 символов
+            if (hex.length > 64) {
+                hex = hex.slice(-64);
             } else {
-                // Иначе пробуем динамически импортировать
-                console.log('Пробуем динамически импортировать TonWeb');
-                
-                try {
-                    // Попытка 1: Динамический импорт через ES модули
-                    const TonWebModule = await import('tonweb');
-                    this.TonWebLib = TonWebModule.default;
-                    console.log('TonWeb успешно импортирован как ES модуль');
-                } catch (importError) {
-                    console.warn('Ошибка при импорте TonWeb как ES модуль:', importError);
-                    
-                    try {
-                        // Попытка 2: Загрузка через DOM если есть window
-                        if (typeof window !== 'undefined') {
-                            console.log('Пробуем загрузить TonWeb через DOM');
-                            await this.loadTonWebInDOM();
-                            
-                            // Проверяем, доступен ли TonWeb после загрузки скрипта
-                            if ((window as any).TonWeb) {
-                                this.TonWebLib = (window as any).TonWeb;
-                                console.log('TonWeb успешно загружен через DOM');
-                            } else {
-                                throw new Error('TonWeb не доступен после загрузки скрипта');
-                            }
-                        } else {
-                            throw new Error('window не определен, не можем загрузить скрипт');
-                        }
-                    } catch (scriptError) {
-                        console.error('Все методы загрузки TonWeb завершились с ошибкой:', scriptError);
-                        this.initializationStatus = 'error';
-                        throw new Error(`Не удалось загрузить TonWeb: ${scriptError}`);
-                    }
-                }
+                hex = hex.padStart(64, '0');
             }
             
-            // Если библиотека не загружена после всех попыток, выбрасываем ошибку
-            if (!this.TonWebLib) {
-                this.initializationStatus = 'error';
-                throw new Error('TonWeb библиотека не была загружена ни одним из способов');
-            }
+            /* console.log('Base64Url to Hex конвертация:', {
+                input: base64Url,
+                cleanBase64,
+                paddedBase64: base64,
+                bufferLength: buffer.length,
+                initialHexLength: buffer.toString('hex').length,
+                resultHex: hex,
+                finalHexLength: hex.length
+            }); */
             
-            // Инициализируем API ключ и тестовую сеть
-            this.isTestnet = this.getIsTestnet();
-            this.apiKey = this.getApiKey();
-            
-            // Создаем провайдера
-            let provider;
-            try {
-                provider = this.createProvider();
-                console.log('Провайдер успешно создан', {
-                    isTestnet: this.isTestnet,
-                    hasApiKey: !!this.apiKey
-                });
-            } catch (providerError) {
-                console.error('Ошибка при создании провайдера:', providerError);
-                this.initializationStatus = 'error';
-                throw new Error(`Не удалось создать провайдера: ${providerError}`);
-            }
-            
-            // Создаем экземпляр TonWeb
-            try {
-                this.tonweb = new this.TonWebLib(provider);
-                console.log('Экземпляр TonWeb успешно создан');
-                this.initializationStatus = 'success';
-            } catch (instanceError) {
-                console.error('Ошибка при создании экземпляра TonWeb:', instanceError);
-                this.initializationStatus = 'error';
-                throw new Error(`Не удалось создать экземпляр TonWeb: ${instanceError}`);
-            }
-        } catch (error) {
-            console.error('Ошибка инициализации TonWeb:', error);
-            this.initializationStatus = 'error';
+            return hex;
+            } catch (error) {
+            console.error('Ошибка конвертации base64url в hex:', {
+                input: base64Url,
+                error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+            });
             throw error;
         }
     }
 
-    public getProvider(): any {
-        return this.tonweb?.provider || null;
-    }
-
-    public isInTestnetMode(): boolean {
-        return this.isTestnet;
-    }
-
-    public async waitForTonWeb(timeout?: number): Promise<boolean> {
-        // Получаем значение таймаута из настроек или используем переданное значение
-        const configTimeout = parseInt(import.meta.env.VITE_TONWEB_TIMEOUT || '5000', 10);
-        const effectiveTimeout = timeout || configTimeout;
-        
-        // Если TonWeb уже инициализирован, быстро возвращаем true
-        if (this.isTonWebReady()) {
-            console.log('TonWeb уже готов и доступен');
-            return true;
-        }
-        
+    private normalizeAddress(address: string): string {
         try {
-            // Проверяем, доступен ли TonWeb уже в window
-            if (typeof window !== 'undefined' && (window as any).TonWeb) {
-                console.log('TonWeb найден в глобальном контексте window');
-                this.TonWebLib = (window as any).TonWeb;
-                
-                if (!this.tonweb && this.TonWebLib) {
-                    // Создаем экземпляр TonWeb
-                    await this.initializeTonWeb();
+            address = address.trim();
+            if (address.startsWith('0:')) {
+                const hex = address.slice(2);
+                if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+                    throw new Error('Invalid hex format');
                 }
-                
-                if (this.isTonWebReady()) {
-                    console.log('TonWeb успешно инициализирован из глобального контекста');
-                    return true;
-                }
+                return address;
             }
-            
-            // Запускаем асинхронную инициализацию, если она еще не запущена
-            if (!this.initializationPromise) {
-                console.log('Запускаем асинхронную инициализацию TonWeb');
-                this.initializationPromise = this.initializeTonWeb();
+            if (address.startsWith('EQ') || address.startsWith('UQ')) {
+                const hex = this.base64UrlToHex(address);
+                return `0:${hex}`;
             }
-            
-            // Ожидаем завершения инициализации
-            await this.ensureInitialized();
-            
-            console.log(`TonWeb загружается, ожидаем инициализации (таймаут: ${effectiveTimeout}мс)...`);
-            
-            // Увеличиваем количество попыток и уменьшаем задержку между ними
-            const startTime = Date.now();
-            const checkInterval = 100; // 100мс между проверками
-            const maxAttempts = Math.floor(effectiveTimeout / checkInterval);
-            let attempts = 0;
-            
-            while (attempts < maxAttempts) {
-                attempts++;
-                
-                if (this.isTonWebReady()) {
-                    const elapsedTime = Date.now() - startTime;
-                    console.log(`TonWeb успешно инициализирован за ${elapsedTime}мс (${attempts} попыток)`);
-                    return true;
-                }
-                
-                // Если TonWeb появился в window, используем его
-                if (typeof window !== 'undefined' && (window as any).TonWeb && !this.TonWebLib) {
-                    console.log('TonWeb обнаружен в window во время ожидания');
-                    this.TonWebLib = (window as any).TonWeb;
-                    
-                    // Пробуем создать новый экземпляр
-                    try {
-                        await this.initializeTonWeb();
-                        if (this.isTonWebReady()) {
-                            console.log('TonWeb успешно инициализирован из window во время ожидания');
-                            return true;
-                        }
-                    } catch (windowInitError) {
-                        console.error('Ошибка инициализации из window:', windowInitError);
-                    }
-                }
-                
-                // Небольшая пауза перед следующей проверкой
-                await new Promise(resolve => setTimeout(resolve, checkInterval));
-            }
-            
-            // Проверяем, были ли установлены необходимые свойства в разные моменты инициализации
-            if (this.tonweb && !this.TonWebLib && typeof window !== 'undefined' && (window as any).TonWeb) {
-                this.TonWebLib = (window as any).TonWeb;
-                console.log('TonWeb библиотека обнаружена в window после ожидания');
-                return true;
-            }
-            
-            if (!this.tonweb && this.TonWebLib) {
-                console.log('TonWeb библиотека есть, но не создан экземпляр, пробуем создать');
-                try {
-                    await this.initializeTonWeb();
-                    if (this.isTonWebReady()) {
-                        console.log('TonWeb успешно инициализирован после дополнительной попытки');
-                        return true;
-                    }
-                } catch (initError) {
-                    console.error('Ошибка при дополнительной инициализации:', initError);
-                }
-            }
-            
-            // Последний шанс - пробуем загрузить библиотеку через скрипт
-            console.warn(`Тайм-аут ожидания TonWeb (${effectiveTimeout}мс). Пробуем загрузить через скрипт...`);
-            
-            try {
-                // Сбрасываем предыдущее состояние
-                this.TonWebLib = null;
-                this.tonweb = null;
-                this.initializationPromise = null;
-                
-                // Пробуем загрузить через DOM
-                await this.loadTonWebInDOM();
-                
-                // Если после загрузки скрипта TonWeb появился, используем его
-                if (typeof window !== 'undefined' && (window as any).TonWeb) {
-                    this.TonWebLib = (window as any).TonWeb;
-                    await this.initializeTonWeb();
-                    if (this.isTonWebReady()) {
-                        console.log('TonWeb успешно инициализирован после загрузки через скрипт');
-                        return true;
-                    }
-                }
-            } catch (scriptError) {
-                console.error('Ошибка при загрузке TonWeb через скрипт:', scriptError);
-            }
-            
-            console.error(`TonWeb не удалось инициализировать в указанный таймаут (${effectiveTimeout}мс) после всех попыток`);
-            return false;
+            throw new Error('Unsupported address format');
         } catch (error) {
-            console.error('Критическая ошибка в методе waitForTonWeb:', error);
-            return false;
+            console.error('Address normalization error:', error);
+            throw error;
         }
     }
 
-    // Методы для работы с кошельком
-    public async createWallet(publicKey: Uint8Array) {
-        await this.ensureInitialized();
-        if (!this.tonweb) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        return this.tonweb.wallet.create({ publicKey });
-    }
-
-    public async getWalletAddress(wallet: any) {
-        await this.ensureInitialized();
-        const address = await wallet.getAddress();
-        return address.toString(true, true, false); // non-bounceable address
-    }
-
-    public async getWalletSeqno(wallet: any) {
-        await this.ensureInitialized();
-        return await wallet.methods.seqno().call();
-    }
-
-    public async deployWallet(wallet: any, secretKey: Uint8Array) {
-        await this.ensureInitialized();
-        return await wallet.deploy(secretKey).send();
-    }
-
-    public async estimateTransferFee(wallet: any, params: {
-        secretKey: Uint8Array;
-        toAddress: string;
-        amount: string | number;
-        seqno: number;
-        payload?: string;
-        sendMode?: number;
-    }) {
-        await this.ensureInitialized();
-        if (!this.TonWebLib) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        return await wallet.methods.transfer({
-            ...params,
-            amount: typeof params.amount === 'string' ? params.amount : this.TonWebLib.utils.toNano(params.amount),
-            sendMode: params.sendMode || 3,
-        }).estimateFee();
-    }
-
-    public async createCell() {
-        await this.ensureInitialized();
-        if (!this.TonWebLib) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        const Cell = this.TonWebLib.boc.Cell;
-        return new Cell();
-    }
-
-    public async getTransactions(address: string) {
-        await this.ensureInitialized();
-        if (!this.tonweb) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        return await this.tonweb.getTransactions(address);
-    }
-
-    // Получаем значение баланса по умолчанию из переменных окружения или используем 50
-    private getDefaultBalance(): number {
-        const defaultBalance = import.meta.env.VITE_DEFAULT_CONTRACT_BALANCE;
-        return defaultBalance ? Number(defaultBalance) : 50;
-    }
-
-    // Метод для получения баланса с проверкой на ограничение запросов и кэшированием
-    public async getBalance(address: string): Promise<number | null> {
-        if (!address) {
-            console.warn('getBalance: Адрес не передан');
-            return null;
-        }
-
-        // Нормализуем адрес для кэша (убираем пробелы)
-        const normalizedAddress = address.trim();
-        
-        // Проверяем кэш
-        const cachedData = this.balanceCache.get(normalizedAddress);
-        if (cachedData && Date.now() - cachedData.timestamp < this.balanceCacheTime) {
-            console.log(`Используем кэшированный баланс для ${normalizedAddress}: ${cachedData.balance} TON`);
-            return cachedData.balance;
-        }
-
+    public createAddress(addressString: string): any {
         try {
-            // Проверяем инициализацию TonWeb
-            if (!this.isTonWebReady()) {
-                console.warn('TonWeb не инициализирован для запроса баланса');
-                await this.waitForTonWeb(5000);
-                
-                if (!this.isTonWebReady()) {
-                    console.error('TonWeb не удалось инициализировать для запроса баланса');
-                    return this.getDefaultBalance(); // Возвращаем значение по умолчанию
-                }
-            }
-
-            // Фиксируем адрес для форматов с префиксом EQ
-            let addressToUse = normalizedAddress;
+            // console.log('Создание адреса из строки:', addressString);
             
-            console.log(`Начинаем получение баланса для адреса: ${addressToUse}`);
+            // Нормализуем адрес
+            const normalizedAddress = this.normalizeAddress(addressString);
+            // console.log('Нормализованный адрес:', normalizedAddress);
             
-            // Используем HTTP API для получения баланса, что избегает проблем с форматами адресов
-            try {
-                const endpoint = this.isTestnet ? 'https://testnet.toncenter.com' : 'https://toncenter.com';
-                
-                // Форматируем адрес для API запроса
-                // Если адрес содержит подчеркивания, заменяем их на слэши
-                let apiAddress = addressToUse;
-                if (apiAddress.includes('_')) {
-                    apiAddress = apiAddress.replace(/_/g, '/');
-                    console.log(`Адрес содержит подчеркивания, заменены на слэши: ${apiAddress}`);
-                }
-                
-                // Строим URL для запроса к API
-                const url = `${endpoint}/api/v2/getAddressInformation`;
-                
-                // Параметры запроса добавляем в URLSearchParams
-                const params = new URLSearchParams();
-                params.append('address', apiAddress);
-                
-                // Заголовки запроса
-                const headers: HeadersInit = { 'Accept': 'application/json' };
-                if (this.apiKey) {
-                    headers['X-API-Key'] = this.apiKey;
-                }
-                
-                console.log(`Запрашиваем информацию через API для адреса: ${apiAddress}`);
-                
-                // Выполняем запрос с параметрами в теле URL
-                const response = await fetch(`${url}?${params.toString()}`, { 
-                    method: 'GET',
-                    headers
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.result && data.result.balance) {
-                        // Преобразуем из наноТОН в TON
-                        const balance = await this.fromNano(data.result.balance);
-                        
-                        // Кэшируем результат
-                        this.balanceCache.set(normalizedAddress, {
-                            balance,
-                            timestamp: Date.now()
-                        });
-                        
-                        console.log(`Получен баланс через API: ${balance} TON`);
-                        return balance;
-                    }
-                } else {
-                    console.warn(`Ошибка API (${response.status} ${response.statusText}): ${await response.text()}`);
-                }
-            } catch (apiError) {
-                console.warn(`Ошибка при запросе API: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
-            }
+            // Создаем адрес через TonWeb
+            const address = new this.tonweb.utils.Address(normalizedAddress);
             
-            // Если не получилось через API, пробуем через TonWeb напрямую
-            console.log('Пробуем получить баланс через TonWeb напрямую');
-            
-            // Попытка 1: Стандартный конструктор
-            try {
-                const directAddress = new this.TonWebLib.utils.Address(addressToUse);
-                const balance = await this.fromNano(await this.tonweb.getBalance(directAddress));
-                
-                this.balanceCache.set(normalizedAddress, {
-                    balance,
-                    timestamp: Date.now()
-                });
-                
-                console.log(`Баланс получен через стандартный конструктор: ${balance} TON`);
-                return balance;
-            } catch (directError) {
-                console.warn(`Не удалось создать адрес через стандартный конструктор: ${directError instanceof Error ? directError.message : String(directError)}`);
-            }
-            
-            // Попытка 2: Замена подчеркиваний на слэши
-            if (addressToUse.includes('_')) {
-                try {
-                    const slashAddress = addressToUse.replace(/_/g, '/');
-                    const fixedAddress = new this.TonWebLib.utils.Address(slashAddress);
-                    const balance = await this.fromNano(await this.tonweb.getBalance(fixedAddress));
-                    
-                    this.balanceCache.set(normalizedAddress, {
-                        balance,
-                        timestamp: Date.now()
-                    });
-                    
-                    console.log(`Баланс получен после замены подчеркиваний: ${balance} TON`);
-                    return balance;
-                } catch (slashError) {
-                    console.warn(`Не удалось создать адрес после замены подчеркиваний: ${slashError instanceof Error ? slashError.message : String(slashError)}`);
-                }
-            }
-            
-            // Попытка 3: Для адресов с префиксом EQ - преобразование в raw-формат
-            if (addressToUse.startsWith('EQ')) {
-                try {
-                    // Если используем тестовую сеть, пробуем использовать адрес из окружения
-                    if (this.isInTestnetMode() && import.meta.env.VITE_CONTRACT_ADDRESS) {
-                        const testAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-                        console.log(`Используем тестовый адрес из окружения: ${testAddress}`);
-                        
-                        try {
-                            const envAddress = new this.TonWebLib.utils.Address(testAddress);
-                            const balance = await this.fromNano(await this.tonweb.getBalance(envAddress));
-                            
-                            this.balanceCache.set(normalizedAddress, {
-                                balance,
-                                timestamp: Date.now()
-                            });
-                            
-                            console.log(`Баланс получен через тестовый адрес: ${balance} TON`);
-                            return balance;
-                        } catch (envError) {
-                            console.warn(`Не удалось использовать тестовый адрес: ${envError instanceof Error ? envError.message : String(envError)}`);
-                        }
-                    }
-                } catch (testError) {
-                    console.warn(`Ошибка при проверке тестового режима: ${testError instanceof Error ? testError.message : String(testError)}`);
-                }
-            }
-            
-            // Если все попытки не удались, возвращаем значение по умолчанию
-            console.warn('Все методы получения баланса не сработали, возвращаем значение по умолчанию');
-            return this.getDefaultBalance();
-        } catch (error) {
-            console.error('Ошибка при получении баланса:', error);
-            return this.getDefaultBalance(); // Значение по умолчанию
-        }
-    }
-
-    public async sendBoc(bocBytes: Uint8Array) {
-        await this.ensureInitialized();
-        if (!this.tonweb) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        return await this.tonweb.sendBoc(bocBytes);
-    }
-
-    // Утилиты
-    public async toNano(amount: number): Promise<string> {
-        await this.ensureInitialized();
-        if (!this.TonWebLib) {
-            throw new Error('TonWeb не инициализирован');
-        }
-        return this.TonWebLib.utils.toNano(amount);
-    }
-
-    public async fromNano(amount: string | number): Promise<number> {
-        try {
-            if (!this.tonweb) {
-                return Number(amount) / 1e9;
-            }
-            
-            if (typeof amount === 'number') {
-                amount = amount.toString();
-            }
-            
-            try {
-                const fromNanoResult = await this.tonweb.utils.fromNano(amount);
-                return parseFloat(fromNanoResult);
-            } catch (error) {
-                console.warn('Ошибка при использовании tonweb.utils.fromNano:', error);
-                // Ручное преобразование как резервный вариант
-                return Number(amount) / 1e9;
-            }
-        } catch (error) {
-            console.error('Ошибка в методе fromNano:', error);
-            return Number(amount) / 1e9;
-        }
-    }
-
-    /**
-     * Загрузка TonWeb через скрипт в DOM
-     */
-    public async loadTonWebInDOM(): Promise<boolean> {
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
-            console.error('loadTonWebInDOM: window или document не определены');
-            return false;
-        }
-        
-        // Проверяем, есть ли уже TonWeb
-        if ((window as any).TonWeb) {
-            console.log('TonWeb уже загружен в window');
-            return true;
-        }
-        
-        // Проверяем, загружен ли скрипт уже
-        if (this.loadedScript) {
-            console.log('Скрипт TonWeb уже был загружен ранее');
-            // Ждем загрузку, если скрипт уже добавлен
-            return new Promise<boolean>((resolve) => {
-                const checkTonWeb = () => {
-                    if ((window as any).TonWeb) {
-                        console.log('TonWeb появился в window');
-                        resolve(true);
-                    } else {
-                        setTimeout(checkTonWeb, 100);
-                    }
-                };
-                
-                checkTonWeb();
+            // Проверяем, что адрес создался корректно
+            // const rawAddress = address.toString(true, true, true);
+            /* console.log('Адрес создан успешно:', {
+                original: addressString,
+                normalized: normalizedAddress,
+                raw: rawAddress
             });
-        }
-        
-        return new Promise<boolean>((resolve, reject) => {
-            // Получаем URL скрипта из переменных окружения, либо используем CDN
-            const scriptUrl = import.meta.env.VITE_TONWEB_SCRIPT_URL || 
-                'https://cdn.jsdelivr.net/npm/tonweb@0.0.62/dist/tonweb.js';
-                
-            try {
-                // Создаем элемент script
-                const script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.src = scriptUrl;
-                script.async = true;
-                script.defer = true;
-                
-                // Обработчики загрузки и ошибки
-                script.onload = () => {
-                    console.log(`TonWeb скрипт успешно загружен из ${scriptUrl}`);
-                    this.loadedScript = script;
-                    
-                    if ((window as any).TonWeb) {
-                        console.log('TonWeb доступен в window после загрузки скрипта');
-                        this.TonWebLib = (window as any).TonWeb;
-                        resolve(true);
-                    } else {
-                        console.error('Скрипт загрузился, но TonWeb не найден в window');
-                        reject(new Error('TonWeb не найден в window после загрузки скрипта'));
-                    }
-                };
-                
-                script.onerror = (error) => {
-                    console.error(`Ошибка загрузки скрипта TonWeb из ${scriptUrl}:`, error);
-                    reject(new Error(`Не удалось загрузить скрипт TonWeb: ${error}`));
-                };
-                
-                // Добавляем скрипт в DOM
-                document.head.appendChild(script);
-                console.log(`Скрипт TonWeb добавлен в DOM из ${scriptUrl}`);
-            } catch (error) {
-                console.error('Ошибка при добавлении скрипта TonWeb в DOM:', error);
-                reject(error);
+             */
+            return address;
+        } catch (error: unknown) {
+            console.error('Ошибка создания адреса:', {
+                address: addressString,
+                error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+            });
+            
+            if (error instanceof Error) {
+                throw new Error(`Неверный формат адреса: ${error.message}`);
             }
-        });
-    }
-    
-    /**
-     * Получает значение isTestnet из конфигурации
-     */
-    private getIsTestnet(): boolean {
-        return import.meta.env.VITE_IS_TESTNET === 'true';
-    }
-    
-    /**
-     * Получает API ключ из конфигурации
-     */
-    private getApiKey(): string | null {
-        return import.meta.env.VITE_TONCENTER_API_KEY || null;
-    }
-    
-    /**
-     * Создает провайдера для TonWeb
-     */
-    private createProvider(): any {
-        if (!this.TonWebLib) {
-            throw new Error('TonWebLib не инициализирован, невозможно создать провайдера');
+            throw new Error('Неверный формат адреса');
         }
-        
-        // Получаем URL API в зависимости от выбранной сети
-        const endpoint = this.isTestnet
-            ? 'https://testnet.toncenter.com/api/v2/jsonRPC'
-            : 'https://toncenter.com/api/v2/jsonRPC';
-        
-        // Настраиваем опции провайдера
-        const providerOptions: any = {
-            retry: 3 // Количество повторных попыток для запросов
-        };
-        
-        // Добавляем API ключ, если он доступен
-        if (this.apiKey) {
-            providerOptions.apiKey = this.apiKey;
+    }
+
+    public isValidAddress(address: string): boolean {
+        try {
+            const normalizedAddress = this.normalizeAddress(address);
+            new this.tonweb.utils.Address(normalizedAddress);
+            return true;
+        } catch {
+            return false;
         }
-        
-        // Создаем HTTP-провайдера
-        const httpProvider = new this.TonWebLib.HttpProvider(endpoint, providerOptions);
-        
-        // Сохраняем оригинальный метод отправки
-        httpProvider.sendOriginal = httpProvider.send;
-        
-        // Переопределяем метод отправки для обработки ошибок
-        httpProvider.send = async (method: string, params: any) => {
-            const startTime = Date.now();
-            try {
-                // Проверяем, не находимся ли мы в периоде ожидания из-за ограничения запросов
-                if (Date.now() < this.rateLimitedUntil) {
-                    const waitTime = this.rateLimitedUntil - Date.now();
-                    if (waitTime > 0) {
-                        console.warn(`Ожидание из-за ограничения запросов: ${waitTime}мс`);
-                        await new Promise(resolve => setTimeout(resolve, waitTime));
-                    }
-                }
-                
-                console.log(`Отправка запроса ${method} к API`);
-                const result = await httpProvider.sendOriginal(method, params);
-                return result;
-            } catch (error) {
-                // Проверяем на ограничение запросов (429)
-                if (error && (typeof error === 'object') && 
-                    ('status' in error) && (error as any).status === 429) {
-                    
-                    // Устанавливаем задержку для следующих запросов
-                    const retryAfter = (error as any).retryAfter || 1000;
-                    this.rateLimitedUntil = Date.now() + Math.min(retryAfter, this.maxRateLimitWait);
-                    
-                    console.warn(`Получено ограничение запросов (429), следующий запрос через ${retryAfter}мс`);
-                    
-                    // Повторяем запрос после задержки
-                    await new Promise(resolve => setTimeout(resolve, retryAfter));
-                    return await httpProvider.send(method, params);
-                }
-                
-                // Для других ошибок - просто пробрасываем
-                console.error(`Ошибка API запроса ${method}:`, error);
-                throw error;
-            } finally {
-                console.log(`Запрос ${method} выполнен за ${Date.now() - startTime}мс`);
+    }
+
+    // Конвертация из TON в наногрэмы
+    public toNano(amount: number | string): string {
+        try {
+            return this.tonweb.utils.toNano(amount.toString());
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Ошибка конвертации в наногрэмы:', error.message);
             }
-        };
+            return '0';
+        }
+    }
+
+    // Конвертация из наногрэмов в TON
+    public fromNano(amountStr: string | number | undefined): string {
+        // Добавляем проверку типа и преобразование
+        if (typeof amountStr !== 'string' && typeof amountStr !== 'number') {
+            console.error('Некорректный тип данных для конвертации:', typeof amountStr);
+            return '0';
+        }
         
-        return httpProvider;
+        const str = amountStr.toString();
+        
+        // Проверяем, что строка содержит только цифры
+        if (!/^\d+$/.test(str)) {
+            console.warn('Некорректное значение для конвертации из наногрэмов:', str);
+            return '0';
+        }
+        
+        return this.tonweb.utils.fromNano(str);
+    }
+
+    // Получение баланса адреса
+    public async getBalance(address: string): Promise<string> {
+        try {
+            //console.log('Запрос баланса для адреса:', address);
+
+            // Проверяем и нормализуем адрес
+            if (!address) {
+                throw new Error('Адрес не указан');
+            }
+
+            let normalizedAddress = this.normalizeAddress(address);
+            let response = await this.provider.send('getAddressInformation', {
+                address: normalizedAddress
+            });
+            if (address.startsWith('EQ') || address.startsWith('UQ')) {
+                normalizedAddress = this.normalizeAddress(address);
+                // console.log('Адрес ', address, ' нормализован:', normalizedAddress);
+                response = await this.provider.send('getAddressInformation', {
+                    address: address
+                });
+            }
+
+            if (!this.isValidAddress(normalizedAddress)) {
+                throw new Error('Неверный формат адреса');
+            }
+
+            if (!response?.result) {
+                throw new Error('Не получен результат запроса баланса');
+            }
+
+            const balance = response.result.balance;
+            /* console.log('Баланс получен:', {
+                address: normalizedAddress,
+                rawBalance: balance,
+                formattedBalance: this.fromNano(balance)
+            }); */
+
+            // Добавляем проверку результата
+            if (!balance || typeof balance !== 'string') {
+                console.warn('Некорректный формат баланса:', balance);
+                response = await this.provider.send('getAddressInformation', {
+                    address: address
+                });
+            }
+
+            return this.fromNano(balance);
+        } catch (error: unknown) {
+            console.error('Ошибка при получении баланса:', {
+                address,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            return '0';
+        }
+    }
+
+    // Отправка BOC в сеть
+    public async sendBoc(bocBytes: Uint8Array): Promise<{ hash: string }> {
+        try {
+            const result = await this.provider.sendBoc(bocBytes);
+            if (!result?.hash) {
+                throw new Error('Не получен хеш транзакции');
+            }
+            return { hash: result.hash };
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Ошибка при отправке BOC:', error.message);
+            }
+            throw error;
+        }
+    }
+
+    // Получение транзакций адреса
+    public async getTransactionsbyTxHash(
+        txHash: string,
+        address: string,
+        lt?: string
+    ): Promise<TransactionInfo[]> {
+        try {
+            let response = await this.provider.send('getTransactions', {
+                hash: txHash,
+                address: address,
+                lt: lt
+            });
+            return this.mapTransactions(response.result);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Ошибка при получении транзакций по хэшу:', error.message);
+            }
+            throw error;
+        }
+    }
+
+    private mapTransactions(txs: any[]): TransactionInfo[] {
+        return txs.map((tx: any) => ({
+            address: tx.address || '',
+            utime: tx.utime || 0,
+            hash: tx.hash || '',
+            lt: tx.lt || '0',
+            amount: this.fromNano(tx.amount || '0'),
+            from: tx.in_msg?.source || '',
+            to: tx.out_msgs?.[0]?.destination || '',
+            fee: this.fromNano(tx.fee || '0')
+        }));
+    }
+
+    // Получение транзакций адреса
+    public async getTransactions(
+        address: string, 
+        limit: number = 20
+    ): Promise<TransactionInfo[]> {
+        try {
+            if (!this.isValidAddress(address)) {
+                throw new Error('Неверный формат адреса');
+            }
+            const txs = await this.provider.getTransactions(address, limit);
+            return txs.map((tx: any) => ({
+                address: tx.address,
+                utime: tx.utime,
+                hash: tx.hash,
+                lt: tx.lt,
+                amount: this.fromNano(tx.amount || '0'),
+                from: tx.from_address,
+                to: tx.to_address,
+                fee: this.fromNano(tx.fee || '0')
+            }));
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Ошибка при получении транзакций:', error.message);
+            }
+            return [];
+        }
+    }
+    
+    // Создание базового контракта
+    public createContract(address: string | any, options: any = {}): any {
+        try {
+            const tonAddress = typeof address === 'string' ? this.createAddress(address) : address;
+            return new this.tonweb.Contract(this.provider, {
+                address: tonAddress,
+                ...options
+            });
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Ошибка при создании контракта: ${error.message}`);
+            }
+            throw error;
+        }
+    }
+
+    // Форматирование адреса
+    public formatAddress(address: string | any): string {
+        try {
+            const tonAddress = typeof address === 'string' ? this.createAddress(address) : address;
+            return tonAddress.toString();
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Ошибка форматирования адреса:', error.message);
+            }
+            return address.toString();
+        }
+    }
+
+    public async getTransactionHash(boc: string): Promise<string> {
+        try {
+            /* console.log('Начало получения хэша транзакции из BOC:', {
+                bocLength: boc?.length,
+                bocPreview: boc?.slice(0, 50) + '...'
+            }); */
+            
+            if (!boc) {
+                throw new Error('BOC не может быть пустым');
+            }
+
+            // Конвертируем BOC из base64 в байты и создаем Cell
+            const bocBytes = this.tonweb.utils.base64ToBytes(boc);
+            const cell = this.tonweb.boc.Cell.oneFromBoc(bocBytes);
+            
+            if (!cell) {
+                throw new Error('Не удалось создать Cell из BOC');
+            }
+
+            // Получаем хэш и конвертируем в base64
+            const hashBytes = await cell.hash();
+            const hashBase64 = this.tonweb.utils.bytesToBase64(hashBytes);
+
+            /* console.log('Получен хэш транзакции:', {
+                hashBase64,
+                length: hashBase64.length
+            }); */
+
+            return hashBase64;
+        } catch (error) {
+            console.error('Ошибка при получении хэша транзакции:', {
+                error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+                bocLength: boc?.length,
+                bocStart: boc?.slice(0, 50)
+            });
+            throw new Error('Не удалось получить хэш транзакции: ' + (error instanceof Error ? error.message : 'неизвестная ошибка'));
+        }
+    }
+
+    // Получение данных контракта
+    async getContractData(address: string, method: string, params: any[] = []): Promise<any> {
+        try {
+            const result = await this.provider.call2(address, method, params);
+            return result;
+        } catch (error) {
+            console.error('Ошибка при получении данных контракта:', error);
+            throw error;
+        }
+    }
+
+    public async sendProviderRequest(method: string, params: any): Promise<any> {
+        return this.provider.send(method, params);
     }
 }
 
-// Экспортируем синглтон напрямую
-const tonwebInstance = TonWebHelper.getInstance();
-
+const tonwebInstance = TonWebInstance.getInstance();
 export default tonwebInstance; 

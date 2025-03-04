@@ -3,464 +3,302 @@ import tonwebInstance from './tonwebInstance';
 
 // Добавляем тип для результата ставки
 export interface FlipResult {
-    status: 'win' | 'lose' | 'pending' | 'error';
     amount: number;
     side: boolean;
-    winAmount?: number;
     error?: string;
-    transactionHash?: string;
+    result?: string;
+    txhash?: string;
+    lt?: string;
+    boc?: string;
 }
+
 
 // Интерфейс для адреса
 interface AddressWrapper {
     toString: () => string;
 }
 
+// Интерфейс для параметров internal
+interface InternalParams {
+    value: number;
+    body: any;
+    bounce?: boolean;
+    sendMode?: number;
+}
+
+// Интерфейс для транзакции TON
+interface TonTransaction {
+    hash: string;
+    in_msg?: {
+        destination: string;
+    };
+    compute?: {
+        exit_code?: number;
+        success?: boolean;
+    };
+    out_msgs?: Array<{
+        source: string;
+        destination: string;
+        value: string;
+        created_lt?: string;
+        msg_data?: {
+            text?: string;
+            body?: string; // Добавляем поле для бинарных данных
+        };
+    }>;
+}
+
+
+
 // Интерфейс для контрактного провайдера
-export interface ContractProviderWrapper {
-    internal: (address: string, params: any) => Promise<any>;
-    // Другие методы провайдера...
+interface ContractProvider {
+    internal: (address: string, params: InternalParams) => Promise<{ id?: string; boc?: string }>;
+    getTransactions: (address: string, params: { limit: number; lt?: string; hash?: string }) => Promise<{ ok: boolean; result: any[] }>;
+    sendBocReturnHash: (boc: string) => Promise<{ ok: boolean; result: { hash: string } }>;
+    getTransactionsbyAddress: (address: string) => Promise<{ ok: boolean; result: any[] }>;
+    get: () => Promise<{ stack: any[] }>;
+    [key: string]: any; // Индексная сигнатура для дополнительных свойств
 }
 
 // Более простая реализация без прямого импорта из смарт-контракта
 export class CoinFlipContract {
+    [x: string]: any;
     private contract: any;
-    private provider: ContractProviderWrapper;
-    private isTonWebInitialized: boolean = false;
+    private readonly provider: ContractProvider;
+    private readonly contractAddress: string;
+    private readonly tonConnectUI: any;
 
-    constructor(addressStr: string, provider: ContractProviderWrapper) {
-        console.log(`Инициализация CoinFlipContract с адресом: ${addressStr}`);
+    constructor(contractAddress: string, provider: ContractProvider, tonConnectUI: any) {
+        if (!tonwebInstance.isValidAddress(contractAddress)) {
+            throw new Error(`Invalid contract address: ${contractAddress}`);
+        }
+        // console.log('Provider type:', typeof provider);
+        // Добавьте проверку провайдера
+        if (!provider) throw new Error('Provider is required');
+        if (!tonConnectUI) throw new Error('TonConnectUI is required');
         
+        /* console.log('CoinFlipContract constructor:', {
+            originalAddress: contractAddress,
+            trimmedAddress: contractAddress.trim(),
+            providerExists: !!provider,
+            tonConnectUIExists: !!tonConnectUI
+        }); */
+        
+        this.contractAddress = contractAddress.trim();
         this.provider = provider;
-        
-        // Используем адрес напрямую без трансформации
+        this.tonConnectUI = tonConnectUI;
+        this.initContract();
+    }
+
+    private async initContract(): Promise<void> {
         try {
-            console.log('Пытаемся создать контракт с исходным адресом:', addressStr);
-            this.createContract(addressStr);
-        } catch (error) {
-            console.warn('Ошибка при создании контракта с исходным адресом:', error);
+            /* console.log('Начало инициализации контракта:', {
+                contractAddress: this.contractAddress,
+                isTestnet: import.meta.env.VITE_IS_TESTNET,
+                tonwebExists: !!tonwebInstance,
+                tonwebMethods: Object.keys(tonwebInstance)
+            }); */
+
+            // Пытаемся создать адрес через TonWeb
+            /* console.log('Создаем адрес через TonWeb...'); */
+            const address = await tonwebInstance.createAddress(this.contractAddress);
+            /* console.log('Адрес создан:', {
+                originalAddress: this.contractAddress,
+                createdAddress: address,
+                addressMethods: Object.keys(address || {})
+            }); */
             
-            // Используем адрес из .env в последней попытке
-            const envAddress = import.meta.env.VITE_CONTRACT_ADDRESS as string;
-            if (envAddress && envAddress !== addressStr) {
+            // Получаем raw-адрес
+            // console.log('Получаем raw-адрес...');
+            const rawAddress = address.toString(true, true, true);
+            //console.log('Raw адрес получен:', rawAddress);
+            
+            // Создаем контракт с raw-адресом
+            // console.log('Создаем контракт...');
+            this.contract = await tonwebInstance.createContract(rawAddress);
+            /* console.log('Контракт создан:', {
+                contract: this.contract,
+                contractMethods: Object.keys(this.contract || {})
+            }); */
+        } catch (error) {
+            console.error('Ошибка инициализации контракта:', {
+                error,
+                errorMessage: error instanceof Error ? error.message : 'Неизвестная ошибка',
+                errorStack: error instanceof Error ? error.stack : undefined,
+                contractAddress: this.contractAddress
+            });
+            
+            // Пробуем использовать адрес из .env как запасной вариант
+            const envAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+            /* console.log('Пробуем использовать адрес из .env:', {
+                envAddress,
+                currentAddress: this.contractAddress,
+                isDifferent: envAddress !== this.contractAddress
+            }); */
+
+            if (envAddress && envAddress !== this.contractAddress) {
                 try {
-                    console.log('Пытаемся создать контракт с адресом из .env:', envAddress);
-                    this.createContract(envAddress);
-                } catch (thirdError) {
-                    console.error('Критическая ошибка: невозможно создать контракт', thirdError);
-                    
-                    // Создаем контракт-заглушку
-                    this.contract = { 
-                        address: { toString: () => addressStr },
-                        methods: {}
-                    };
+                    // console.log('Создаем адрес из .env...');
+                    const envAddressObj = await tonwebInstance.createAddress(envAddress);
+                    // console.log('Адрес из .env создан:', envAddressObj);
+
+                    const rawEnvAddress = envAddressObj.toString(true, true, true);
+                    // console.log('Raw адрес из .env получен:', rawEnvAddress);
+
+                    this.contract = await tonwebInstance.createContract(rawEnvAddress);
+                    /* console.log('Контракт создан с адресом из .env:', {
+                        contract: this.contract,
+                        contractMethods: Object.keys(this.contract || {})
+                    }); */
+                } catch (fallbackError) {
+                    console.error('Ошибка при использовании адреса из .env:', {
+                        error: fallbackError,
+                        errorMessage: fallbackError instanceof Error ? fallbackError.message : 'Неизвестная ошибка',
+                        envAddress
+                    });
+                    this.createFallbackContract();
                 }
             } else {
-                console.error('Критическая ошибка: невозможно создать контракт, адрес из .env совпадает с переданным');
-                
-                // Создаем контракт-заглушку
-                this.contract = { 
-                    address: { toString: () => addressStr },
-                    methods: {}
-                };
+                // console.log('Создаем fallback контракт...');
+                this.createFallbackContract();
             }
-        }
-        
-        // Запускаем асинхронную проверку инициализации TonWeb
-        this.initTonWeb();
-    }
-    
-    private createContract(addressStr: string): void {
-        // Проверяем инициализацию TonWeb
-        if (!tonwebInstance.getTonWeb()) {
-            console.error('TonWeb не инициализирован');
-            throw new Error('TonWeb не инициализирован');
-        }
-        
-        try {
-            // Получаем TonWeb непосредственно из экземпляра
-            const tonweb = tonwebInstance.getTonWeb();
-            let address;
-            
-            // Очищаем адрес от возможных пробелов
-            const cleanAddressStr = addressStr.trim();
-            console.log(`Пытаемся создать контракт с адресом: ${cleanAddressStr}`);
-            
-            try {
-                // Метод 1: Используем стандартный конструктор адреса TonWeb
-                address = new tonweb.utils.Address(cleanAddressStr);
-                console.log('Адрес успешно создан через стандартный конструктор');
-            } catch (error) {
-                console.warn(`Не удалось создать адрес через стандартный конструктор: ${error instanceof Error ? error.message : String(error)}`);
-                
-                try {
-                    // Метод 2: Создаем базовый WC + HEX адрес в формате 0:XXX...
-                    if (cleanAddressStr.startsWith('EQ')) {
-                        // Если адрес начинается с EQ (пользовательский формат), извлекаем base64 часть
-                        // и преобразуем ее в workchain + hex
-                        const base64Part = cleanAddressStr.substring(2);
-                        
-                        // Используем buffer для преобразования
-                        const hexBytes = Array.from(new Uint8Array(Buffer.from(base64Part, 'base64url')))
-                            .map(b => b.toString(16).padStart(2, '0'))
-                            .join('');
-                        
-                        // Формируем полный адрес в формате 0:hex
-                        const rawAddress = `0:${hexBytes}`;
-                        console.log(`Сформирован raw-адрес: ${rawAddress}`);
-                        
-                        // Пробуем создать адрес из raw-формата
-                        address = new tonweb.utils.Address(rawAddress);
-                        console.log('Адрес успешно создан из raw-формата');
-                    } else {
-                        throw new Error('Адрес не начинается с EQ, невозможно извлечь base64 часть');
-                    }
-                } catch (error) {
-                    console.warn(`Не удалось создать адрес из raw-формата: ${error instanceof Error ? error.message : String(error)}`);
-                    
-                    try {
-                        // Метод 3: Используем встроенный метод для парсинга адреса
-                        // (этот метод может быть доступен в некоторых версиях TonWeb)
-                        if (typeof tonweb.utils.parseAddress === 'function') {
-                            address = tonweb.utils.parseAddress(cleanAddressStr);
-                            console.log('Адрес успешно создан через parseAddress');
-                        } else {
-                            throw new Error('Метод parseAddress не найден в TonWeb');
-                        }
-                    } catch (error) {
-                        console.warn(`Не удалось создать адрес через parseAddress: ${error instanceof Error ? error.message : String(error)}`);
-                        
-                        // Метод 4: Создаем объект-заглушку, имитирующий адрес
-                        console.warn('Все методы создания адреса не сработали, создаем заглушку');
-                        address = {
-                            toString: () => cleanAddressStr,
-                            wc: 0,
-                            hashPart: new Uint8Array(32),
-                            isUserFriendly: () => true,
-                            isBounceable: () => true,
-                            isTestOnly: () => tonwebInstance.isInTestnetMode() // Используем публичный метод
-                        };
-                    }
-                }
-            }
-            
-            // Создаем контракт с полученным адресом
-            this.contract = {
-                address: address,
-                provider: tonweb.provider,
-                methods: {},
-                getAddress: () => address
-            };
-            
-            console.log(`Контракт успешно инициализирован с адресом: ${address.toString()}`);
-        } catch (error) {
-            console.error('Критическая ошибка при создании контракта:', error);
-            throw error;
         }
     }
 
-    // Асинхронный метод для инициализации TonWeb
-    private async initTonWeb(): Promise<void> {
-        try {
-            console.log('Ожидаем инициализацию TonWeb...');
-            const isInitialized = await tonwebInstance.waitForTonWeb(10000); // Увеличиваем таймаут до 10 секунд
-            
-            if (isInitialized) {
-                this.isTonWebInitialized = true;
-                
-                // Если контракт не был создан ранее, попробуем создать его сейчас
-                if (!this.contract || !this.contract.address) {
-                    const addressStr = (this.contract && typeof this.contract.address?.toString === 'function') 
-                        ? this.contract.address.toString() 
-                        : import.meta.env.VITE_CONTRACT_ADDRESS as string;
-                        
-                    console.log('TonWeb инициализирован, пробуем создать контракт с адресом:', addressStr);
-                    try {
-                        this.createContract(addressStr);
-                    } catch (error) {
-                        console.error('Не удалось создать контракт после инициализации TonWeb:', error);
-                    }
+    private createFallbackContract(): void {
+        // console.log('Создание fallback контракта для адреса:', this.contractAddress);
+        this.contract = {
+            address: { 
+                toString: () => this.contractAddress,
+                equals: (other: any) => {
+                    const otherStr = other?.toString();
+                    /* console.log('Сравнение адресов:', {
+                        thisAddress: this.contractAddress,
+                        otherAddress: otherStr
+                    }); */
+                    return otherStr === this.contractAddress;
                 }
-            } else {
-                console.error('TonWeb не инициализирован после ожидания');
             }
-        } catch (error) {
-            console.error('Ошибка при инициализации TonWeb:', error);
-        }
+        };
     }
 
     // Метод для получения баланса контракта
-    async getBalance(): Promise<number> {
+    public async getBalance(): Promise<number> {
         try {
-            // Проверяем наличие кэшированного баланса
-            const now = Date.now();
-            const cachedBalance = localStorage.getItem('cachedContractBalance');
-            const lastFetchTime = localStorage.getItem('lastContractFetchTime');
-            const cacheTimeout = 60 * 1000; // 1 минута
-            
-            let validCachedBalance: number | null = null;
-            
-            // Проверяем валидность кэшированного баланса
-            if (cachedBalance && lastFetchTime) {
-                const lastFetch = parseInt(lastFetchTime, 10);
-                if (!isNaN(lastFetch) && now - lastFetch < cacheTimeout) {
-                    validCachedBalance = parseFloat(cachedBalance);
-                    if (!isNaN(validCachedBalance)) {
-                        console.log(`Используем кэшированный баланс контракта: ${validCachedBalance}`);
-                        return validCachedBalance;
-                    }
-                }
-            }
-            
-            console.log('Запрос реального баланса контракта');
-            
-            // Проверяем инициализацию TonWeb и наличие контракта
-            if (!this.contract || !this.contract.address) {
-                console.warn('Контракт не инициализирован для получения баланса');
-                return validCachedBalance || 10; // Возвращаем кэшированное значение или 10 по умолчанию
-            }
-            
-            // Проверяем инициализацию TonWeb
-            if (!this.isTonWebInitialized) {
-                console.log('TonWeb не инициализирован, пробуем инициализировать для получения баланса');
-                
-                // Пробуем дождаться инициализации, если она еще не завершена
-                const isReady = await tonwebInstance.waitForTonWeb(5000);
-                this.isTonWebInitialized = isReady;
-                
-                if (!isReady || !tonwebInstance.getTonWeb()) {
-                    console.warn('TonWeb не инициализирован, используем кэшированный баланс');
-                    return validCachedBalance || 10;
-                }
-            }
-            
-            // Преобразуем адрес в строку для безопасной передачи в TonWeb
-            let contractAddressStr = '';
-            try {
-                contractAddressStr = this.contract.address.toString();
-            } catch (e) {
-                // Если не удалось преобразовать адрес в строку, используем исходный адрес
-                contractAddressStr = this.contract.address || '';
-                console.warn('Не удалось преобразовать адрес контракта в строку, используем исходный адрес');
-            }
+            const address = this.contract?.address?.toString() || this.contractAddress;
+            /* console.log('Получение баланса для адреса:', {
+                contractAddress: address,
+                originalAddress: this.contractAddress,
+                hasContract: !!this.contract,
+                hasAddress: !!this.contract?.address
+            }); */
 
-            // Проверяем, что адрес не пустой
-            if (!contractAddressStr) {
-                console.warn('Адрес контракта пустой, используем адрес из окружения');
-                contractAddressStr = import.meta.env.VITE_CONTRACT_ADDRESS || '';
-            }
-
-            console.log(`Получаем баланс контракта для адреса: ${contractAddressStr}`);
-            
-            // Получаем баланс через TonWeb синглтон
-            const tonwebBalance = await tonwebInstance.getBalance(contractAddressStr);
-            if (tonwebBalance !== null && tonwebBalance !== undefined) {
-                console.log(`Получен баланс контракта через TonWeb: ${tonwebBalance} TON`);
-                
-                // Сохраняем полученное значение в localStorage
-                localStorage.setItem('cachedContractBalance', tonwebBalance.toString());
-                localStorage.setItem('lastContractFetchTime', now.toString());
-                
-                return tonwebBalance;
-            }
-            
-            // Если не удалось получить баланс через TonWeb, и есть валидный кэшированный баланс
-            if (validCachedBalance !== null) {
-                console.log(`Используем кэшированный баланс после неудачного запроса: ${validCachedBalance}`);
-                return validCachedBalance;
-            }
-            
-            // Если все способы не сработали, возвращаем фиксированное значение
-            console.warn('Невозможно получить баланс, возвращаем значение по умолчанию 10 TON');
-            return 10;
+            const balance = await tonwebInstance.getBalance(address);
+            /* console.log('Баланс получен:', {
+                address,
+                balance,
+                numberBalance: Number(balance)
+            }); */
+            return Number(balance) || 0;
         } catch (error) {
-            console.error('Ошибка при получении баланса контракта:', error);
-            // В случае ошибки возвращаем фиксированное значение
-            return 10;
+            console.error('Ошибка получения баланса контракта:', {
+                error,
+                errorMessage: error instanceof Error ? error.message : 'Неизвестная ошибка',
+                contractAddress: this.contractAddress
+            });
+            return 0;
         }
     }
 
     // Метод для получения баланса кошелька
-    async getWalletBalance(walletAddress: string): Promise<number> {
+    public async getWalletBalance(walletAddress: string): Promise<number> {
         try {
-            console.log(`Запрос баланса кошелька для адреса: ${walletAddress}`);
-            
-            // Проверяем кэш с коротким временем жизни
-            const cacheKey = `balance_wallet_${walletAddress}`;
-            const cachedBalanceStr = localStorage.getItem(cacheKey);
-            const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
-            const now = Date.now();
-            const CACHE_LIFETIME = 5000; // 5 секунд для кошелька (обновляем чаще)
-            
-            // Если есть свежие данные в кэше, сразу возвращаем их
-            if (cachedBalanceStr && now - cachedTime < CACHE_LIFETIME) {
-                const balanceValue = Number(cachedBalanceStr);
-                console.log(`Используем кэшированный баланс кошелька: ${balanceValue} TON (обновлен ${Math.round((now - cachedTime) / 1000)} сек. назад)`);
-                
-                // Проверяем на NaN даже при чтении из кэша
-                if (isNaN(balanceValue)) {
-                    console.warn("Кэшированное значение баланса кошелька невалидно (NaN)");
-                } else {
-                    return balanceValue;
-                }
-            }
-            
-            // Получаем баланс через TonWeb синглтон
-            const tonwebBalance = await tonwebInstance.getBalance(walletAddress);
-            if (tonwebBalance !== null) {
-                // Дополнительная проверка на NaN
-                if (isNaN(tonwebBalance)) {
-                    console.error("Получено невалидное значение баланса (NaN) от TonWeb");
-                } else {
-                    console.log(`Получен баланс кошелька через TonWeb: ${tonwebBalance} TON`);
-                    
-                    // Сохраняем в localStorage как глобальный баланс и для конкретного адреса
-                    localStorage.setItem('balance_wallet', tonwebBalance.toString());
-                    localStorage.setItem(cacheKey, tonwebBalance.toString());
-                    localStorage.setItem(`${cacheKey}_time`, now.toString());
-                    
-                    return tonwebBalance;
-                }
-            }
-            
-            // Если не удалось получить через TonWeb, возвращаем кэшированное значение (даже устаревшее)
-            // Сначала проверяем кэш для конкретного адреса
-            if (cachedBalanceStr) {
-                const balanceValue = Number(cachedBalanceStr);
-                if (!isNaN(balanceValue)) {
-                    console.log(`Используем устаревший кэшированный баланс для адреса ${walletAddress}: ${balanceValue} TON`);
-                    return balanceValue;
-                }
-            }
-            
-            // Если нет кэша для конкретного адреса, используем глобальный кэш кошелька
-            const globalCachedBalanceStr = localStorage.getItem('balance_wallet');
-            const globalCachedBalance = globalCachedBalanceStr ? parseFloat(globalCachedBalanceStr) : 10;
-            const validGlobalCachedBalance = !isNaN(globalCachedBalance) ? globalCachedBalance : 10;
-            
-            console.log(`Не удалось получить баланс кошелька, используем глобальное кэшированное значение: ${validGlobalCachedBalance} TON`);
-            return validGlobalCachedBalance;
+            // Создаем адрес и получаем его raw-версию
+            const address = await tonwebInstance.createAddress(walletAddress);
+            const rawAddress = address.toString(true, true, true);
+            const balance = await tonwebInstance.getBalance(rawAddress);
+            return Number(balance) || 0;
         } catch (error) {
-            console.error("Ошибка при получении баланса кошелька:", error);
-            
-            // Безопасное чтение кэшированного значения с проверкой на NaN
-            const cachedBalanceStr = localStorage.getItem('balance_wallet');
-            const cachedBalance = cachedBalanceStr ? parseFloat(cachedBalanceStr) : 10;
-            return !isNaN(cachedBalance) ? cachedBalance : 10;
+            console.error('Ошибка получения баланса кошелька:', error);
+            return 0;
         }
     }
 
-    async sendFlip(side: boolean, amount: number): Promise<FlipResult> {
-        console.log(`Вызов sendFlip: сторона=${side}, сумма=${amount}`);
-        
+    
+
+    public async sendFlip(side: boolean, amount: number): Promise<FlipResult> {
         try {
-            // Создаем сообщение для контракта
-            // 1722533851 - это опкод для Flip (можно найти в tact_MainContract.ts)
-            const messageBody = beginCell()
-                .storeUint(1722533851, 32) // op-код метода Flip
-                .storeBit(side)           // сторона (true - орел, false - решка)
+            console.log('Отправляю флип с параметрами: side =', side, 'amount =', amount, 'TON');
+            
+            // Конвертируем amount в наногоны
+            const amountNano = Math.floor(amount * 1e9);
+            console.log('Сумма в наногонах:', amountNano);
+            
+            const msgBody = beginCell()
+                .storeUint(0x66b9a3fb, 32) // правильный operation code для Flip
+                .storeBit(side)           // side parameter
                 .endCell();
+
+            // Формируем транзакцию напрямую для TonConnect UI
+            const transaction = {
+                validUntil: Math.floor(Date.now() / 1000) + 360,
+                messages: [{
+                    address: this.contractAddress,
+                    amount: amountNano.toString(),
+                    payload: msgBody.toBoc().toString('base64')
+                }]
+            };
             
-            // Отладочная информация
-            console.log("Сформировано сообщение для контракта:", {
-                address: this.contract.address.toString(),
-                amount: amount,
-                messageBody: messageBody.toString()
-            });
-            
-            // Преобразуем байт-код ячейки в base64 для отправки через TonConnect
-            const base64Boc = messageBody.toBoc().toString('base64');
-            console.log("Base64 BOC:", base64Boc);
-            
-            // Вызываем метод internal из провайдера
-            const result = await (this.provider as any).internal(this.contract.address.toString(), {
-                value: amount * 1_000_000_000, // конвертируем TON в нано-TON
-                body: messageBody
-            });
-            
-            console.log("Результат транзакции:", result);
-            
-            // Возвращаем результат в pending статусе
-            // Настоящий результат будет получен позже через событие транзакции
+            // Отправляем транзакцию через TonConnect UI
+            console.log('Отправляем транзакцию через TonConnectUI:', transaction);
+            const result = await this.tonConnectUI.sendTransaction(transaction);
+            console.log('Результат отправки транзакции:', result);
+
+            if (!result) {
+                throw new Error('Не получен результат транзакции');
+            }
+
             return {
-                status: 'pending',
                 amount: amount,
                 side: side,
-                transactionHash: result?.id || '',
+                txhash: result.boc ? await this.getTransactionHash(result.boc) : undefined,
+                lt: result.lt,
+                boc: result.boc
             };
         } catch (error) {
-            console.error("Ошибка при отправке транзакции:", error);
+            console.error('Ошибка отправки транзакции:', error);
             return {
-                status: 'error',
                 amount: amount,
                 side: side,
-                error: String(error)
+                error: error instanceof Error ? error.message : 'Неизвестная ошибка'
             };
         }
     }
-    
-    // Метод для проверки результата ставки по хешу транзакции
-    async checkFlipResult(transactionHash: string, amount: number, side: boolean): Promise<FlipResult> {
+
+    private async getTransactionHash(boc: string): Promise<string> {
         try {
-            console.log("Проверка результата ставки по хешу:", transactionHash);
-            
-            if (!transactionHash) {
-                return {
-                    status: 'error',
-                    amount: amount,
-                    side: side,
-                    error: 'Отсутствует хеш транзакции'
-                };
-            }
-            
-            // Используем более безопасный подход без прямого доступа к транзакциям
-            try {
-                // Получаем последние транзакции через контрактный метод или эвенты
-                // Это примерный код, который нужно адаптировать под конкретную реализацию
-                
-                // В реальности здесь нужно использовать контрактные методы для получения результата
-                // Например, получение события о результате флипа монеты
-                
-                // Для демонстрации используем случайный результат
-                const isWin = Math.random() > 0.5;
-                const winAmount = isWin ? amount * 2 : 0;
-                
-                return {
-                    status: isWin ? 'win' : 'lose',
-                    amount: amount,
-                    side: side,
-                    winAmount: winAmount,
-                    transactionHash: transactionHash
-                };
-            } catch (providerError) {
-                console.error("Ошибка при получении результата транзакции:", providerError);
-                
-                // Для демонстрации, если не удалось получить через провайдер
-                const isWin = Math.random() > 0.5;
-                const winAmount = isWin ? amount * 2 : 0;
-                
-                return {
-                    status: isWin ? 'win' : 'lose',
-                    amount: amount,
-                    side: side,
-                    winAmount: winAmount,
-                    transactionHash: transactionHash
-                };
-            }
+            const tonweb = tonwebInstance.getTonWeb();
+            const bocBytes = tonweb.utils.base64ToBytes(boc);
+            const cell = await tonweb.boc.Cell.oneFromBoc(bocBytes);
+            const hashBytes = await cell.hash();
+            return tonweb.utils.bytesToBase64(hashBytes);
         } catch (error) {
-            console.error("Ошибка при проверке результата ставки:", error);
-            return {
-                status: 'error',
-                amount: amount,
-                side: side,
-                error: String(error)
-            };
+            console.error('Ошибка при получении хэша транзакции:', error);
+            return '';
         }
+    }
+
+    
+
+    
+
+    public getContractAddress(): string {
+        return this.contractAddress;
     }
 
     async getOwner(): Promise<AddressWrapper> {
         try {
-            console.log("Запрос владельца контракта");
+            // console.log("Запрос владельца контракта");
             // Упрощенная версия без вызова метода контракта
             return this.contract.address;
         } catch (error) {
@@ -468,4 +306,4 @@ export class CoinFlipContract {
             return this.contract.address;
         }
     }
-} 
+}

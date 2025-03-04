@@ -19,12 +19,12 @@ export default function BuilderPage() {
     // Инициализация контракта
     const initContract = useCallback(() => {
         if (!connected || !wallet) {
-            console.log("Не инициализируем контракт - кошелек не подключен");
+            // console.log("Не инициализируем контракт - кошелек не подключен");
             return;
         }
         
         try {
-            console.log("Инициализация контракта с адресом", wallet.account.address);
+            // console.log("Инициализация контракта с адресом", wallet.account.address);
             
             // Упрощенный адаптер провайдера для нашего контракта
             const provider = {
@@ -33,7 +33,7 @@ export default function BuilderPage() {
                 
                 // Метод для отправки транзакций через TonConnect UI
                 internal: async (_address: any, args: any) => {
-                    console.log("Вызов internal с аргументами:", args);
+                    // console.log("Вызов internal с аргументами:", args);
                     return tonConnectUI.sendTransaction({
                         validUntil: Math.floor(Date.now() / 1000) + 360,
                         messages: [
@@ -47,9 +47,9 @@ export default function BuilderPage() {
                 }
             };
             
-            const contractInstance = new CoinFlipContract(CONTRACT_ADDRESS, provider as any);
+            const contractInstance = new CoinFlipContract(CONTRACT_ADDRESS, provider as any, tonConnectUI);
             setContract(contractInstance);
-            console.log("Контракт успешно инициализирован");
+            // console.log("Контракт успешно инициализирован");
             
             // Запрашиваем баланс (для демо используем фиксированное значение)
             setBalance(10);
@@ -61,11 +61,11 @@ export default function BuilderPage() {
 
     // Отладочный эффект для мониторинга состояния подключения
     useEffect(() => {
-        console.log("Изменилось состояние кошелька:", { 
+        /* console.log("Изменилось состояние кошелька:", { 
             wallet: wallet ? wallet.account.address : 'не подключен',
             connected,
             wallDetails: wallet
-        });
+        }); */
         
         if (connected && wallet) {
             toast.success("Кошелек подключен: " + wallet.account.address.slice(0, 8) + "...");
@@ -81,21 +81,21 @@ export default function BuilderPage() {
 
     // Первоначальная проверка подключения
     useEffect(() => {
-        console.log("TonConnect состояние:", { 
+        /* console.log("TonConnect состояние:", { 
             isConnected: connected,
             walletReady: Boolean(wallet),
             wallet: wallet?.account?.address
-        });
+        }); */
     }, [connected, wallet]);
 
 
-    console.log("Рендер MainPage", { 
+    /* console.log("Рендер MainPage", { 
         connected, 
         balance, 
         error, 
         wallet: wallet?.account?.address,
         contractInitialized: Boolean(contract)
-    });
+    }); */
 
 
 

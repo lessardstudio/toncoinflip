@@ -58,10 +58,10 @@ export default function BetBlock(){
                 const provider = tonConnectUI.connector?.wallet?.provider || null;
                 
                 // Проверяем тип провайдера и выводим отладочную информацию
-                console.log("Тип провайдера:", typeof provider, provider);
+                // console.log("Тип провайдера:", typeof provider, provider);
                 
                 // Создаем экземпляр контракта с имеющимся провайдером
-                const contract = new CoinFlipContract(contractAddress, provider as any);
+                const contract = new CoinFlipContract(contractAddress, provider as any, tonConnectUI);
                 
                 // Получаем балансы уже в TON (после изменений в tonwebInstance.ts)
                 const contractBalance = await contract.getBalance();
@@ -69,28 +69,55 @@ export default function BetBlock(){
                     ? await contract.getWalletBalance(wallet.account.address) 
                     : 0;
                 
-                console.log(`Баланс контракта: ${contractBalance} TON, баланс кошелька: ${walletBalance} TON`);
+                /* console.log(`Обновление балансов:`, {
+                    contractBalance,
+                    walletBalance,
+                    timestamp: new Date().toISOString()
+                }); */
                 
-                // Устанавливаем балансы
-                setContractBalance(contractBalance);
-                setWalletBalance(walletBalance);
+                // Устанавливаем балансы только если они изменились
+                setContractBalance(prevBalance => {
+                    if (prevBalance !== contractBalance) {
+                        /* console.log('Обновление баланса контракта:', {
+                            prevBalance,
+                            newBalance: contractBalance
+                        }); */
+                        return contractBalance;
+                    }
+                    return prevBalance;
+                });
+                
+                setWalletBalance(prevBalance => {
+                    if (prevBalance !== walletBalance) {
+                        /* console.log('Обновление баланса кошелька:', {
+                            prevBalance,
+                            newBalance: walletBalance
+                        }); */
+                        return walletBalance;
+                    }
+                    return prevBalance;
+                });
                 
                 // Обновляем максимальную ставку
                 updateMaxBet(contractBalance, walletBalance);
                 
                 return { contractBalance, walletBalance };
             } catch (error) {
-                console.error("Ошибка при получении балансов:", error);
+                console.error("Ошибка при получении балансов:", {
+                    error,
+                    errorMessage: error instanceof Error ? error.message : 'Неизвестная ошибка',
+                    errorStack: error instanceof Error ? error.stack : undefined
+                });
             }
         };
         
         // Сразу получаем начальные данные
         fetchBalances();
         
-        // И устанавливаем интервал для обновления
+        // И устанавливаем интервал для обновления каждые 2 секунды
         const intervalId = setInterval(() => {
             fetchBalances();
-        }, 5000); // Обновляем каждые 5 секунд
+        }, 2000);
         
         // Очищаем интервал при размонтировании компонента
         return () => clearInterval(intervalId);
@@ -105,11 +132,11 @@ export default function BetBlock(){
         const newMaxBet = Math.min(contractLimit, walletLimit, defaultMaxBet);
         setMaxBetValue(newMaxBet);
         
-        console.log("Лимиты ставки:", {
+        /* console.log("Лимиты ставки:", {
             contractLimit,
             walletLimit,
             newMaxBet
-        });
+        }); */
     };
 
     const maxBet = () => {

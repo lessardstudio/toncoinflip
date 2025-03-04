@@ -77,7 +77,7 @@ export function DropMenuSwitchLang() {
     const id = setTimeout(() => {
       if (!isMouseOverMenu.current) {
         setIsOpen(false); // Закрываем меню при уходе с него
-        console.log(isMobile);
+        // console.log(isMobile);
       }
     }, 100); // Устанавливаем задержку в 300 мс
     setTimeoutId(id); // Сохраняем идентификатор таймаута

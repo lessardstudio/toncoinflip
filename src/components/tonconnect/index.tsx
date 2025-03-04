@@ -14,6 +14,7 @@ import { Button } from "../ui/button";
 import { useTranslation } from "../lang";
 import { Wallet, Flag, LogOut, Landmark  } from 'lucide-react';
 import { useRef, useState, useEffect } from "react";
+import tonwebInstance from "@/lib/tonwebInstance";
 
 function truncateStart(string: string) {
     const n = 8; // Количество символов для отображения
@@ -57,22 +58,23 @@ export const WalletObj: React.FC = () => {
     
     // Получаем баланс кошелька из localStorage
     useEffect(() => {
-        const getWalletBalance = () => {
-            // Пробуем получить баланс из localStorage
-            const storedBalance = localStorage.getItem('balance_wallet') || localStorage.getItem('cachedWalletBalance');
-            if (storedBalance) {
-                setWalletBalance(Number(storedBalance));
+        const fetchBalance = async () => {
+            try {
+                if (!wallet) return;
+                const balance = await tonwebInstance.getBalance(wallet.account.address);
+                setWalletBalance(Number(balance));
+                localStorage.setItem('cachedWalletBalance', balance);
+            } catch (error) {
+                console.error('Ошибка получения баланса:', error);
             }
         };
         
-        // Получаем баланс при загрузке
-        getWalletBalance();
-        
-        // Обновляем баланс каждые 5 секунд
-        const intervalId = setInterval(getWalletBalance, 5000);
-        
-        return () => clearInterval(intervalId);
-    }, []);
+        if (wallet) {
+            fetchBalance();
+            const interval = setInterval(fetchBalance, 10000);
+            return () => clearInterval(interval);
+        }
+    }, [wallet]);
 
     const handleLogout = () => {
         if (tonUi) {

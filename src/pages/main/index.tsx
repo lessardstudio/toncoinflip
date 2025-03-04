@@ -2,19 +2,110 @@ import { useTranslation } from "@/components/lang";
 import ChoseItem from "./chose";
 import BetBlock from "./bet";
 import { Button } from "@/components/ui/button";
-import { ItemsGames } from "./itemgames";
 import MoneyBag from '/tg_money_bag.webp'
 import MoneyWings from '/tg_money_with_wings.webp'
 import GemStone from '/tg_gem_stone.webp'
 import createBetTransaction from "@/components/tonweb/sendBetTransaction";
 import { useCallback, useState, useEffect } from "react";
-import { CoinFlipContract, FlipResult } from "@/lib/contractWrapper";
+import { CoinFlipContract } from "@/lib/contractWrapper";
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { toast } from "react-toastify";
+import { TonClient } from '@ton/ton';
+import { Address, beginCell, Cell } from '@ton/core';
+import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
 
 // Получаем адрес контракта из переменных окружения
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'EQDTu0cHyVvEaUMF9NYk9p_MAUKtHxR_mZC15mvoB9tYwJ6r';
+
+// Инициализируем TonClient
+const tonClient = new TonClient({
+    endpoint: import.meta.env.VITE_IS_TESTNET === 'true' 
+        ? 'https://testnet.toncenter.com/api/v2/jsonRPC'
+        : 'https://toncenter.com/api/v2/jsonRPC',
+    apiKey: import.meta.env.VITE_TONCENTER_API_KEY
+});
+
+interface ExternalMessage {
+    info: {
+        type: string;
+    };
+    body?: string;
+}
+
+interface TonTransaction {
+    hash: {
+        toString(format: string): string;
+    };
+    lt: string | bigint;
+    inMessage?: ExternalMessage;
+}
+
+interface Transaction {
+    hash: string;
+    prev_tx_hash?: string;
+    compute?: {
+        success: boolean;
+        exit_code: number;
+    };
+    in_msg?: {
+        value: string;
+    };
+    out_msgs?: Array<{
+        value: string;
+    }>;
+}
+
+// Функция для повторных попыток
+const retry = async (fn: () => Promise<any>, { retries = 30, delay = 1000 } = {}) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+
+// Функция для получения транзакции по BOC
+export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<{txHash: string, lt: string, inMsg: ExternalMessage}> {
+    const myAddress = Address.parse(walletAddress);
+
+    return retry(async () => {
+        const transactions = await tonClient.getTransactions(myAddress, {
+            limit: 5,
+        }) as unknown as TonTransaction[];
+        
+        for (const tx of transactions) {
+            const inMsg = tx.inMessage;
+            if (inMsg?.info.type === 'external-in') {
+                const inBOC = inMsg?.body;
+                if (typeof inBOC === 'undefined') {
+                    console.error('Invalid external message');
+                    continue;
+                }
+                
+                const extHash = Cell.fromBase64(exBoc).hash().toString('hex');
+                const inHash = beginCell().store(storeMessage(inMsg as any)).endCell().hash().toString('hex');
+
+                console.log(' hash BOC', extHash);
+                console.log('inMsg hash', inHash);
+                console.log('checking the tx', tx.hash.toString('base64'));
+
+                if (extHash === inHash) {
+                    console.log('Tx match');
+                    const txHash = tx.hash.toString('hex');
+                    // const hash = beginCell().store(storeMessage(tx as any)).endCell().hash().toString('hex');
+                    console.log(`Transaction: ${extHash} ${txHash} `);
+                    console.log(`Transaction LT: ${tx.lt.toString()}`);
+                    return {txHash: extHash, lt: tx.lt.toString(), inMsg: inMsg};
+                }
+            }
+        }
+        throw new Error('Transaction not found');
+    });
+}
 
 export default function MainPage() {
     const { translations: T } = useTranslation();
@@ -29,30 +120,39 @@ export default function MainPage() {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     
     // Состояния для отслеживания результата игры
-    const [lastFlipResult, setLastFlipResult] = useState<FlipResult | null>(null);
-    const [pendingTransaction, setPendingTransaction] = useState<{hash: string, amount: number, side: boolean} | null>(null);
+    const [txloading, setTxLoading] = useState<boolean>(false);
     const [showResult, setShowResult] = useState<boolean>(false);
+    const [lastFlipResult, setLastFlipResult] = useState<{status: string, amount: number, side: boolean, winAmount: number} | null>(null);
+    // Состояние для истории игр
     
     // Инициализация контракта
     useEffect(() => {
         if (!connected || !wallet) {
-            console.log("Кошелек не подключен, контракт не инициализирован");
-            return;
+            // console.log("Кошелек не подключен, контракт не инициализирован");
+            return; 
         }
         
         // Используем асинхронную функцию внутри useEffect
         const initContract = async () => {
             try {
-                console.log("Инициализация контракта с адресом", CONTRACT_ADDRESS);
+                // console.log("Инициализация контракта с адресом", CONTRACT_ADDRESS);
                 
                 // Создаем провайдер для контракта через TonConnect
                 const provider = {
                     // Метод для получения данных контракта
-                    get: async () => ({ stack: [] }),
+                    get: async () => {
+                        try {
+                            const result = await tonwebInstance.getContractData(CONTRACT_ADDRESS, 'getGame');
+                            return { stack: result };
+                        } catch (error) {
+                            console.error('Ошибка при вызове get:', error);
+                            return { stack: [] };
+                        }
+                    },
                     
                     // Метод для отправки транзакций
                     internal: async (_address: any, args: any) => {
-                        console.log("Вызов internal с аргументами:", args);
+                        // console.log("Вызов internal с аргументами:", args);
                         return tonConnectUI.sendTransaction({
                             validUntil: Math.floor(Date.now() / 1000) + 360,
                             messages: [
@@ -63,64 +163,47 @@ export default function MainPage() {
                                 }
                             ]
                         });
+                    },
+
+                    // Метод для получения транзакций
+                    getTransactions: async (address: string, params: { limit: number; lt?: string; hash?: string }) => {
+                        try {
+                            const response = await tonwebInstance.sendProviderRequest('getTransactions', {
+                                address,
+                                limit: params.limit,
+                                lt: params.lt,
+                                hash: params.hash,
+                                archival: true
+                            });
+                            return { ok: true, result: response.result || [] };
+                        } catch (error) {
+                            console.error('Ошибка при получении транзакций:', error);
+                            return { ok: false, result: [] };
+                        }
+                    },
+
+                    // Метод для получения хэша транзакции из BOC
+                    sendBocReturnHash: async (boc: string) => {
+                        try {
+                            const txHash = await tonwebInstance.getTransactionHash(boc);
+                            return { ok: true, result: { hash: txHash } };
+                        } catch (error) {
+                            console.error("Ошибка при получении хэша транзакции:", error);
+                            return { ok: false, result: { hash: '' } };
+                        }
                     }
                 };
                 
-                const contractInstance = new CoinFlipContract(CONTRACT_ADDRESS, provider as any);
+                const contractInstance = new CoinFlipContract(CONTRACT_ADDRESS, provider as any, tonConnectUI);
                 setContract(contractInstance);
-                console.log("Контракт успешно инициализирован");
+                // console.log("Контракт успешно инициализирован");
                 
                 // Запрашиваем баланс контракта
                 getContractBalance(contractInstance);
                 
                 // Запрашиваем баланс кошелька пользователя
                 if (wallet?.account) {
-                    try {
-                        // Получаем адрес кошелька
-                        const walletAddress = wallet.account.address;
-                        console.log("Запрос баланса кошелька по адресу:", walletAddress);
-                        
-                        // Пробуем сначала получить баланс через TonWeb для максимальной скорости
-                        try {
-                            const tonwebBalance = await tonwebInstance.getBalance(walletAddress);
-                            if (tonwebBalance !== null) {
-                                console.log("Обновление: баланс кошелька через TonWeb:", tonwebBalance, "TON");
-                                setWalletBalance(tonwebBalance);
-                                localStorage.setItem('balance_wallet', `${tonwebBalance}`);
-                                return; // Выходим из функции, если получили баланс через TonWeb
-                            }
-                        } catch (tonwebError) {
-                            console.warn("Не удалось получить баланс через TonWeb:", tonwebError);
-                        }
-                        
-                        // Проверяем кэш
-                        const cacheKey = `balance_${walletAddress}`;
-                        const cachedBalance = localStorage.getItem(cacheKey);
-                        const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
-                        const now = Date.now();
-                        const CACHE_LIFETIME = 12000; // 12 секунд
-                        
-                        // Если есть актуальные данные в кэше, используем их
-                        if (cachedBalance && now - cachedTime < CACHE_LIFETIME) {
-                            const balanceInTon = parseFloat(cachedBalance) / 1_000_000_000;
-                            console.log(`Используем кэшированный баланс кошелька: ${balanceInTon} TON (возраст кэша: ${Math.round((now - cachedTime)/1000)}с)`);
-                            localStorage.setItem('balance_wallet', `${balanceInTon}`);
-                            setWalletBalance(balanceInTon);
-                        } else {
-                            // Используем ContractWrapper для получения баланса
-                            const balanceInTon = await contractInstance.getWalletBalance(walletAddress);
-                            localStorage.setItem('balance_wallet', `${balanceInTon}`);
-                            setWalletBalance(balanceInTon);
-                            console.log("Баланс кошелька:", balanceInTon, "TON");
-                        }
-                    } catch (error) {
-                        console.error("Ошибка при получении баланса кошелька:", error);
-                        // Используем фиксированное значение в случае ошибки
-                        localStorage.setItem('balance_wallet', `${5}`);
-                        setWalletBalance(5);
-                    }
-                } else {
-                    console.log("Кошелек не подключен, не запрашиваем баланс кошелька");
+                    await updateWalletBalance();
                 }
             } catch (error) {
                 console.error("Ошибка инициализации контракта:", error);
@@ -131,53 +214,56 @@ export default function MainPage() {
         // Вызываем асинхронную функцию
         initContract();
     }, [connected, tonConnectUI, wallet]);
+
+
     
-    // Эффект для проверки результата отложенной транзакции
-    useEffect(() => {
-        if (!pendingTransaction || !contract) return;
-        
-        const { hash, amount, side } = pendingTransaction;
-        
-        const checkTransaction = async () => {
-            try {
-                const result = await contract.checkFlipResult(hash, amount, side);
-                
-                // Если транзакция все еще в процессе, проверяем через некоторое время
-                if (result.status === 'pending') {
-                    console.log("Транзакция в процессе, проверим позже:", pendingTransaction);
-                    return;
-                }
-                
-                // Если получили окончательный результат (win/lose/error)
-                if (result.status === 'win' || result.status === 'lose' || result.status === 'error') {
-                    setLastFlipResult(result);
-                    setShowResult(true);
-                    setPendingTransaction(null);
-                    
-                    // Обновляем баланс контракта и кошелька
-                    getContractBalance(contract);
-                    updateWalletBalance();
-                    
-                    // Показываем уведомление о результате
-                    if (result.status === 'win') {
-                        toast.success(`Вы выиграли ${result.winAmount} TON!`);
-                    } else if (result.status === 'lose') {
-                        toast.info(`Вы проиграли ${result.amount} TON.`);
-                    } else {
-                        toast.error(`Ошибка: ${result.error}`);
-                    }
-                }
-            } catch (error) {
-                console.error("Ошибка при проверке транзакции:", error);
+
+    // Проверка транзакции
+    const checkTransaction = async (txHash: string, address: string, lt: string): Promise<{status: string, amount: number}> => {
+        try {
+            console.log('Входные параметры checkTransaction:', { txHash, address, lt });
+
+            if (!contract) {
+                throw new Error('Контракт не инициализирован');
             }
-        };
-        
-        // Проверяем сразу и потом каждые 3 секунды
-        checkTransaction();
-        const interval = setInterval(checkTransaction, 3000);
-        
-        return () => clearInterval(interval);
-    }, [pendingTransaction, contract]);
+
+            if (!txHash || txHash.trim() === '') {
+                throw new Error('Не указан хэш транзакции');
+            }
+
+            if (!address || address.trim() === '') {
+                throw new Error('Не указан адрес');
+            }
+
+            // Формируем параметры запроса
+            const params: any = {
+                address: address.trim(),
+                limit: 3,
+                hash: txHash.trim(),
+                archival: true,
+                to_lt: 0
+            };
+
+            // Добавляем lt только если он не пустой
+            if (lt && lt.trim() !== '') {
+                params.lt = lt.trim();
+            }
+
+            console.log('Параметры запроса к API:', params);
+            const result = await tonwebInstance.sendProviderRequest('getTransactions', params);
+            console.log('Результат проверки транзакции:', result);
+            for (const tx of result.result) {
+                if (tx.in_msg.message.toLowerCase() === 'win' || tx.in_msg.message.toLowerCase() === 'lost') {
+                    return {status: tx.in_msg.message.toLowerCase(), amount: Number(tx.in_msg.value)/1e9}
+                }
+            }
+            return {status: 'none', amount: 0};
+        } catch (error) {
+            console.error('Ошибка при проверке транзакции:', error);
+            throw error; // Пробрасываем ошибку дальше для обработки
+            return {status: 'error: '+error, amount: 0};
+        }
+    };
     
     // Функция обновления баланса кошелька
     const updateWalletBalance = async () => {
@@ -185,54 +271,19 @@ export default function MainPage() {
             // Если есть кошелек и контракт
             if (wallet && wallet.account && wallet.account.address && contract) {
                 const walletAddress = wallet.account.address.toString();
-                
-                // Проверяем кэш
-                const cacheKey = `balance_${walletAddress}`;
-                const cachedBalance = localStorage.getItem(cacheKey);
-                const cachedTime = parseInt(localStorage.getItem(`${cacheKey}_time`) || '0');
-                const now = Date.now();
-                const CACHE_LIFETIME = 12000; // 12 секунд
-                
-                // Если есть актуальные данные в кэше, используем их
-                if (cachedBalance && now - cachedTime < CACHE_LIFETIME) {
-                    const balanceInTon = parseFloat(cachedBalance) / 1_000_000_000;
-                    
-                    // Проверка на NaN 
-                    if (isNaN(balanceInTon)) {
-                        console.error("Кэшированный баланс не является числом (NaN), получаем новый баланс");
-                        // Удаляем некорректное значение из кэша
-                        localStorage.removeItem(cacheKey);
-                        localStorage.removeItem(`${cacheKey}_time`);
-                        
-                        // Запрашиваем актуальный баланс
-                        const newBalance = await contract.getWalletBalance(walletAddress);
-                        setWalletBalance(newBalance);
-                        localStorage.setItem('balance_wallet', `${newBalance}`);
-                        console.log("Обновлен баланс кошелька:", newBalance, "TON");
-                    } else {
-                        console.log(`Используем кэшированный баланс кошелька: ${balanceInTon} TON (возраст кэша: ${Math.round((now - cachedTime)/1000)}с)`);
-                        localStorage.setItem('balance_wallet', `${balanceInTon}`);
-                        setWalletBalance(balanceInTon);
-                    }
+                const balance = await contract.getWalletBalance(walletAddress);
+
+                if (Number(balance) !== walletBalance) {
+                    // console.log("1111 Баланс кошелька:", walletBalance, "TON");
+                    setWalletBalance(Number(balance));
+                    // console.log("Обновлен баланс кошелька:", balance, "TON");
                 } else {
-                    // Используем ContractWrapper для получения баланса
-                    const balanceInTon = await contract.getWalletBalance(walletAddress);
-                    
-                    // Проверка на NaN
-                    if (isNaN(balanceInTon)) {
-                        console.error("Полученный баланс не является числом (NaN), используем значение по умолчанию");
-                        setWalletBalance(5);
-                        localStorage.setItem('balance_wallet', "5");
-                    } else {
-                        localStorage.setItem('balance_wallet', `${balanceInTon}`);
-                        setWalletBalance(balanceInTon);
-                        console.log("Обновление: баланс кошелька:", balanceInTon, "TON");
-                    }
+                    // console.error("Получен некорректный баланс:", balance);
                 }
             }
         } catch (error) {
             console.error("Ошибка при обновлении баланса кошелька:", error);
-            // Не обновляем значение в случае ошибки, оставляем предыдущее
+            setWalletBalance(0);
         }
     };
     
@@ -252,10 +303,11 @@ export default function MainPage() {
             }
             
             setContractBalance(balance);
-            console.log("Баланс контракта:", balance, "TON");
+            // console.log("Баланс контракта:", balance, "TON");
+            updateWalletBalance();
             return balance;
         } catch (error) {
-            console.error("Ошибка при получении баланса контракта:", error);
+            // console.error("Ошибка при получении баланса контракта:", error);
             // Устанавливаем дефолтное значение в случае ошибки
             setContractBalance(50);
             return 50;
@@ -272,9 +324,12 @@ export default function MainPage() {
         }
         
         // Проверка баланса кошелька (с учетом комиссии)
-        if (amount > walletBalance) {
-            toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${walletBalance.toFixed(2)} TON`);
-            return false;
+        if (wallet?.account?.address) {
+            const walletBalance = Number(tonwebInstance.getBalance(wallet?.account?.address?.toString()));
+            if (amount > walletBalance) {
+                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${walletBalance.toFixed(2)} TON`);
+                return false;
+            }
         }
         
         // Проверка максимальной ставки (1/5 от баланса контракта)
@@ -291,13 +346,12 @@ export default function MainPage() {
     const closeResult = () => {
         setShowResult(false);
         setLastFlipResult(null);
+        setTxLoading(false);
     };
     
     // Функция для обработки ставки
     const handleFlip = useCallback(async (side: boolean, amount: number) => {
-        console.log(`Отправка ставки: ${side ? T.bet1 : T.bet2}, сумма: ${amount} TON`);
-        
-        if (!contract || !connected) {
+        if (!contract || !connected || !wallet?.account?.address) {
             toast.error("Кошелек не подключен или контракт не инициализирован");
             return;
         }
@@ -310,29 +364,28 @@ export default function MainPage() {
         setIsLoading(true);
         
         try {
-            console.log(`Отправляем транзакцию через контракт: сторона=${side}, сумма=${amount}`);
             const result = await contract.sendFlip(side, amount);
-            console.log("Результат отправки транзакции:", result);
             
-            if (result.status === 'pending' && result.transactionHash) {
-                toast.info("Ставка размещена! Ожидайте результат.");
-                
-                // Сохраняем информацию о транзакции для последующей проверки
-                setPendingTransaction({
-                    hash: result.transactionHash,
-                    amount: amount,
-                    side: side
-                });
-            } else if (result.status === 'error') {
-                toast.error(`Ошибка: ${result.error}`);
+            // Получаем хэш транзакции по BOC
+            if (result.boc) {
+                setTxLoading(true);
+                const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
+                const res = await checkTransaction(tx.txHash, wallet.account.address.toString(), '');
+                if (res.status === 'win' || res.status === 'lost') {
+                    tonConnectUI.closeModal();
+                    setTxLoading(false);
+                    setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
+                    setShowResult(true);
+                }
             }
+            
         } catch (error) {
             console.error("Ошибка при отправке транзакции:", error);
             toast.error("Не удалось отправить транзакцию");
         } finally {
             setIsLoading(false);
         }
-    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2]);
+    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet]);
     
     // Создаем функцию отправки ставки
     const sendBetTransaction = createBetTransaction(handleFlip);
@@ -361,10 +414,21 @@ export default function MainPage() {
 
     // Компонент для отображения результата
     const ResultModal = () => {
-        if (!showResult || !lastFlipResult) return null;
+        if (!showResult && txloading) return (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                <div className="bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
+                    <h2 className="text-2xl font-bold mb-4">
+                        Обработка транзакции...
+                        <img src={GemStone} alt="GemStone" width="100" height="100" />
+                    </h2>
+                    
+                </div>
+            </div>
+        );
+        else if (!showResult) return null;
         
-        const isWin = lastFlipResult.status === 'win';
-        const sideName = lastFlipResult.side ? T.bet1 : T.bet2;
+        const isWin = lastFlipResult?.status === 'win';
+        const sideName = lastFlipResult?.side ? T.bet1 : T.bet2;
         
         return (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -373,13 +437,14 @@ export default function MainPage() {
                         {isWin ? '🎉 Победа! 🎉' : '😢 Проигрыш 😢'}
                     </h2>
                     <p className="mb-4">
-                        Ваша ставка: <span className="font-bold">{lastFlipResult.amount} TON</span> на <span className="font-bold">{sideName}</span>
+                        Ваша ставка: <span className="font-bold">{lastFlipResult?.amount} TON</span> на <span className="font-bold">{sideName}</span>
                     </p>
                     {isWin && (
                         <p className="text-xl text-green-500 font-bold mb-4">
-                            Выигрыш: {lastFlipResult.winAmount} TON
+                            Выигрыш: {lastFlipResult?.winAmount} TON
                         </p>
                     )}
+      
                     <button 
                         className="bg-[hsla(var(--main-col)/1)] text-[hsl(var(--main-col-bg))] px-6 py-2 rounded-xl"
                         onClick={closeResult}
@@ -452,21 +517,7 @@ export default function MainPage() {
             </div>
             <div className="absolute top-0 right-0 w-[10%] h-full z-40 bg-gradient-to-r from-transparent to-[hsla(var(--main-col-bg)/1)] pointer-events-none"/>
             <div className="relative flex flex-row flex-nowrap gap-2 overflow-hidden px-4 pb-4 w-max">
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0} side={1}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0} side={1}/>
-                <ItemsGames object="hello" id={0} side={1}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0} side={1}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
-                <ItemsGames object="hello" id={0}/>
+                
             </div>
         </div>
         
