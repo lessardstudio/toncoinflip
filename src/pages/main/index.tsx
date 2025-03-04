@@ -209,7 +209,7 @@ export default function MainPage() {
     
 
     // Проверка транзакции
-    const checkTransaction = async (txHash: string, address: string, lt: string, prevLT: number): Promise<{status: string, amount: number}> => {
+    const checkTransaction = async (txHash: string, address: string, lt: string): Promise<{status: string, amount: number}> => {
         try {
             console.log('Входные параметры checkTransaction:', { txHash, address, lt });
 
@@ -358,10 +358,10 @@ export default function MainPage() {
             if (result.boc) {
                 setTxLoading(true);
                 const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
-                let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, tx.prevLT);
+                let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
                 while (res.status === 'none') {
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, tx.prevLT);
+                    res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
                 }
 
                 if (res.status === 'win' || res.status === 'lost') {
