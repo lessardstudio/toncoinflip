@@ -26,27 +26,7 @@ interface InternalParams {
     sendMode?: number;
 }
 
-// Интерфейс для транзакции TON
-interface TonTransaction {
-    hash: string;
-    in_msg?: {
-        destination: string;
-    };
-    compute?: {
-        exit_code?: number;
-        success?: boolean;
-    };
-    out_msgs?: Array<{
-        source: string;
-        destination: string;
-        value: string;
-        created_lt?: string;
-        msg_data?: {
-            text?: string;
-            body?: string; // Добавляем поле для бинарных данных
-        };
-    }>;
-}
+
 
 
 
@@ -64,7 +44,7 @@ interface ContractProvider {
 export class CoinFlipContract {
     [x: string]: any;
     private contract: any;
-    private readonly provider: ContractProvider;
+    // private readonly provider: ContractProvider;
     private readonly contractAddress: string;
     private readonly tonConnectUI: any;
 

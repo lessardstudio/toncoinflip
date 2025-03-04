@@ -41,20 +41,7 @@ interface TonTransaction {
     inMessage?: ExternalMessage;
 }
 
-interface Transaction {
-    hash: string;
-    prev_tx_hash?: string;
-    compute?: {
-        success: boolean;
-        exit_code: number;
-    };
-    in_msg?: {
-        value: string;
-    };
-    out_msgs?: Array<{
-        value: string;
-    }>;
-}
+
 
 // Функция для повторных попыток
 const retry = async (fn: () => Promise<any>, { retries = 30, delay = 1000 } = {}) => {
