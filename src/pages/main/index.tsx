@@ -14,6 +14,8 @@ import { TonClient } from '@ton/ton';
 import { Address, beginCell, Cell } from '@ton/core';
 import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
+import { CoinFlipScene } from "@/components/animations/coinflip";
+import './style.css';
 
 // Получаем адрес контракта из переменных окружения
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'EQDTu0cHyVvEaUMF9NYk9p_MAUKtHxR_mZC15mvoB9tYwJ6r';
@@ -264,6 +266,7 @@ export default function MainPage() {
                 if (Number(balance) !== walletBalance) {
                     // console.log("1111 Баланс кошелька:", walletBalance, "TON");
                     setWalletBalance(Number(balance));
+                    localStorage.setItem('walletBalance', balance.toString());
                     // console.log("Обновлен баланс кошелька:", balance, "TON");
                 } else {
                     // console.error("Получен некорректный баланс:", balance);
@@ -368,7 +371,10 @@ export default function MainPage() {
                     setTxLoading(false);
                     setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
                     setShowResult(true);
+                    setIsLoading(false);
+                    await updateWalletBalance();
                 }
+                await updateWalletBalance();
             }
             
         } catch (error) {
@@ -389,19 +395,65 @@ export default function MainPage() {
         const Bet = localStorage.getItem('bet');
         
         if (!choseTon || !Bet) {
-            toast.error("Выберите сторону и сумму ставки");
+            toast.error("Выберите сторону и сумму ставки",
+                {
+                    position: "top-center",
+                    autoClose: 5000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                }
+            );
             return;
         }
         
         if (!connected) {
-            toast.error("Подключите кошелек для игры");
+            toast.error("Подключите кошелек для игры",
+                {
+                    position: "top-center",
+                    autoClose: 5000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                }
+            );
             return;
+        }
+
+        if (wallet?.account?.address) {
+            const amount = Number(localStorage.getItem('bet'));
+            await updateWalletBalance();
+            const walletBalance = Number(tonwebInstance.getBalance(wallet?.account?.address?.toString()));
+            if (walletBalance && amount > walletBalance) {
+                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${walletBalance.toFixed(2)} TON`,
+                {
+                    position: "top-center",
+                    autoClose: 5000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                }
+            );
+                return;
+            } else if(localStorage.getItem('cachedWalletBalance') && amount > Number(localStorage.getItem('walletBalance'))) {
+                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${localStorage.getItem('cachedWalletBalance')} TON`,
+                {
+                    position: "top-center",
+                    autoClose: 5000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                }
+            );
+                return;
+            }
         }
         
         if (isLoading) {
             toast.info("Подождите, транзакция выполняется");
             return;
         }
+
         
         sendBetTransaction(Number(choseTon), Number(Bet));
     };
@@ -410,11 +462,11 @@ export default function MainPage() {
     const ResultModal = () => {
         if (!showResult && txloading) return (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                <div className="bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
+                <div className="flex flex-col items-center justify-center bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
                     <h2 className="text-2xl font-bold mb-4">
-                        Обработка транзакции...
-                        <img src={GemStone} alt="GemStone" width="100" height="100" />
+                        {T.transactionProcessing}
                     </h2>
+                    <img src={GemStone} alt="GemStone" width="100" height="100" />
                     
                 </div>
             </div>
@@ -422,28 +474,32 @@ export default function MainPage() {
         else if (!showResult) return null;
         
         const isWin = lastFlipResult?.status === 'win';
-        const sideName = lastFlipResult?.side ? T.bet1 : T.bet2;
+        const sideName = lastFlipResult?.side ? T.bet2 : T.bet1;
         
         return (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                <div className="bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
-                    <h2 className="text-2xl font-bold mb-4">
-                        {isWin ? '🎉 Победа! 🎉' : '😢 Проигрыш 😢'}
+                <div className="relative bg-[hsla(var(--main-col-bg)/1)] rounded-3xl max-w-md w-full text-center">
+                    <h2 className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl text-[50px] font-bold z-50 opacity-0 animate-[fadeIn_500ms_ease-in-out_3000ms_forwards] cursor-none select-none">
+                        {isWin ? ` ${T.win.toUpperCase()}` : ` ${T.lost.toUpperCase()}`}
                     </h2>
+
+                    <div className="opacity-1 animate-[fadeOut05_1000ms_ease-in-out_2500ms_forwards]">
+                        <CoinFlipScene isWin={isWin} side={lastFlipResult?.side ?? false}/>
+                    </div>
                     <p className="mb-4">
-                        Ваша ставка: <span className="font-bold">{lastFlipResult?.amount} TON</span> на <span className="font-bold">{sideName}</span>
+                        {T.betPrefix}: <span className="font-bold">{lastFlipResult?.amount} TON</span> {T.onPrefix} <span className="font-bold">{sideName}</span>
                     </p>
                     {isWin && (
-                        <p className="text-xl text-green-500 font-bold mb-4">
-                            Выигрыш: {lastFlipResult?.winAmount} TON
+                        <p className="text-xl text-green-500 font-bold mb-4 opacity-0 animate-[fadeIn_500ms_ease-in-out_3500ms_forwards]">
+                            {T.winAmountPrefix}: {lastFlipResult?.winAmount} TON
                         </p>
                     )}
       
                     <button 
-                        className="bg-[hsla(var(--main-col)/1)] text-[hsl(var(--main-col-bg))] px-6 py-2 rounded-xl"
+                        className="bg-[hsla(var(--main-col)/1)] text-[hsl(var(--main-col-bg))] px-6 py-2 rounded-xl mb-8"
                         onClick={closeResult}
                     >
-                        Продолжить игру
+                        {T.continueBtnFromResult}
                     </button>
                 </div>
             </div>
@@ -483,7 +539,7 @@ export default function MainPage() {
                     hover:bg-[hsla(var(--main-col)/0.6)]
                     transition-colors ease-in-out duration-300
                     select-none cursor-pointer ${isMobile ? `py-5 px-3`:`p-2`}`}
-                    onClick={handleBet}>{isLoading ? "Отправка..." : T.flipBtn}</div>
+                    onClick={handleBet}>{isLoading ? T.transactionSending : T.flipBtn}</div>
                 </div>
             </div>
 

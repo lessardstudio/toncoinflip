@@ -85,6 +85,14 @@ export const en : ILang ={
   bet1:'TON',
   bet2:'NOT',
   balance: '',
+  win: 'Win',
+  lost: 'Lost',
+  winAmountPrefix: 'Win amount',
+  betPrefix: 'Your bet',
+  continueBtnFromResult: 'Close result',
+  onPrefix: 'on',
+  transactionProcessing: 'Processing transaction...',
+  transactionSending: 'Sending...',
 };
 
 export const ru: ILang ={
@@ -144,5 +152,12 @@ export const ru: ILang ={
   bet1:'TON',
   bet2:'NOT',
   balance: '',
-
+  win: 'Выиграл',
+  lost: 'Проиграл',
+  winAmountPrefix: 'Выигрыш',
+  betPrefix: 'Ваша ставка',
+  continueBtnFromResult: 'Закрыть результат',
+  onPrefix: 'на',
+  transactionProcessing: 'Обработка транзакции...',
+  transactionSending: 'Отправляем...',
 };
