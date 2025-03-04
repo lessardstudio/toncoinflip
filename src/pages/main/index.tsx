@@ -56,7 +56,7 @@ const retry = async (fn: () => Promise<any>, { retries = 30, delay = 1000 } = {}
 };
 
 // Функция для получения транзакции по BOC
-export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<{txHash: string, lt: string, inMsg: ExternalMessage}> {
+export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<{txHash: string, prevLT: number, lt: string, inMsg: ExternalMessage}> {
     const myAddress = Address.parse(walletAddress);
 
     return retry(async () => {
@@ -64,7 +64,9 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
             limit: 5,
         }) as unknown as TonTransaction[];
         
+        let prevLT = 0;
         for (const tx of transactions) {
+            if (Number(tx.lt) < prevLT && Number(tx.lt) !== 0) prevLT = Number(tx.lt);
             const inMsg = tx.inMessage;
             if (inMsg?.info.type === 'external-in') {
                 const inBOC = inMsg?.body;
@@ -85,9 +87,9 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
                     const txHash = tx.hash.toString('hex');
                     // const hash = beginCell().store(storeMessage(tx as any)).endCell().hash().toString('hex');
                     console.log(`Transaction: ${extHash} ${txHash} `);
-                    console.log(`Transaction LT: ${tx.lt.toString()}`);
                     const lt = tx.lt.toString();
-                    return {txHash: extHash, lt: lt, inMsg: inMsg};
+                    console.log(`Transaction LT: ${lt}`);
+                    return {txHash: extHash, prevLT: prevLT, lt: `${lt}`, inMsg: inMsg};
                 }
             }
         }
@@ -207,7 +209,7 @@ export default function MainPage() {
     
 
     // Проверка транзакции
-    const checkTransaction = async (txHash: string, address: string, lt: string): Promise<{status: string, amount: number}> => {
+    const checkTransaction = async (txHash: string, address: string, lt: string, prevLT: number): Promise<{status: string, amount: number}> => {
         try {
             console.log('Входные параметры checkTransaction:', { txHash, address, lt });
 
@@ -226,15 +228,14 @@ export default function MainPage() {
             // Формируем параметры запроса
             const params: any = {
                 address: address.trim(),
-                limit: 3,
+                limit: 1,
                 hash: txHash.trim(),
                 archival: true,
-                to_lt: 0
             };
 
             // Добавляем lt только если он не пустой
             if (lt && lt.trim() !== '') {
-                params.lt = lt.trim();
+                params.to_lt = (Number(lt)).toString().trim();
             }
 
             console.log('Параметры запроса к API:', params);
@@ -249,7 +250,6 @@ export default function MainPage() {
         } catch (error) {
             console.error('Ошибка при проверке транзакции:', error);
             throw error; // Пробрасываем ошибку дальше для обработки
-            return {status: 'error: '+error, amount: 0};
         }
     };
     
@@ -358,9 +358,13 @@ export default function MainPage() {
             if (result.boc) {
                 setTxLoading(true);
                 const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
-                const res = await checkTransaction(tx.txHash, wallet.account.address.toString(), '');
+                let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, tx.prevLT);
+                while (res.status === 'none') {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, tx.prevLT);
+                }
+
                 if (res.status === 'win' || res.status === 'lost') {
-                    tonConnectUI.closeModal();
                     setTxLoading(false);
                     setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
                     setShowResult(true);
@@ -371,7 +375,9 @@ export default function MainPage() {
             console.error("Ошибка при отправке транзакции:", error);
             toast.error("Не удалось отправить транзакцию");
         } finally {
-            setIsLoading(false);
+/*             setIsLoading(false);
+            setTxLoading(false);
+            setShowResult(false); */
         }
     }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet]);
     
