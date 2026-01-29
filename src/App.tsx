@@ -4,6 +4,7 @@ import { Theme, TonConnectUIProvider, UIPreferences } from '@tonconnect/ui-react
 import { ThemeProvider } from '@/components/theme';
 import Header from './pages/header';
 import MainPage from './pages/main';
+import HistoryPage from './pages/history';
 
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
                     <Routes>
                       <Route path="/" element={<MainPage/>} />
                       <Route path="/flips" element={<MainPage/>} />
+                      <Route path="/history" element={<HistoryPage/>} />
                     </Routes>
                   </Router>
                 </div>

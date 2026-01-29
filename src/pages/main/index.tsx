@@ -15,6 +15,9 @@ import { Address, beginCell, Cell } from '@ton/core';
 import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
 import { CoinFlipScene } from "@/components/animations/coinflip";
+import { saveGameToHistory, getRecentGames, GameHistoryItem } from "@/lib/utils";
+import { ItemsGames } from "./itemgames";
+import { useNavigate } from "react-router-dom";
 import './style.css';
 
 // Получаем адрес контракта из переменных окружения
@@ -103,6 +106,7 @@ export default function MainPage() {
     const { translations: T } = useTranslation();
     const [tonConnectUI] = useTonConnectUI();
     const wallet = useTonWallet();
+    const navigate = useNavigate();
     const connected = Boolean(wallet?.account?.address);
     
     // Состояния приложения
@@ -116,6 +120,7 @@ export default function MainPage() {
     const [showResult, setShowResult] = useState<boolean>(false);
     const [lastFlipResult, setLastFlipResult] = useState<{status: string, amount: number, side: boolean, winAmount: number} | null>(null);
     // Состояние для истории игр
+    const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
     
     // Инициализация контракта
     useEffect(() => {
@@ -206,6 +211,11 @@ export default function MainPage() {
         // Вызываем асинхронную функцию
         initContract();
     }, [connected, tonConnectUI, wallet]);
+
+    // Загружаем историю игр при монтировании компонента
+    useEffect(() => {
+        setGameHistory(getRecentGames(10));
+    }, []);
 
 
     
@@ -338,6 +348,8 @@ export default function MainPage() {
         setShowResult(false);
         setLastFlipResult(null);
         setTxLoading(false);
+        // Обновляем историю после закрытия модального окна
+        setGameHistory(getRecentGames(10));
     };
     
     // Функция для обработки ставки
@@ -372,6 +384,19 @@ export default function MainPage() {
                     setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
                     setShowResult(true);
                     setIsLoading(false);
+                    
+                    // Сохраняем игру в историю
+                    saveGameToHistory({
+                        amount: amount,
+                        side: side,
+                        status: res.status as 'win' | 'lost',
+                        winAmount: res.status === 'win' ? res.amount : undefined,
+                        txHash: tx.txHash,
+                    });
+                    
+                    // Обновляем историю для отображения
+                    setGameHistory(getRecentGames(10));
+                    
                     await updateWalletBalance();
                 }
                 await updateWalletBalance();
@@ -561,13 +586,36 @@ export default function MainPage() {
         <div className="relative history flex flex-col rounded-[25px] overflow-hidden my-4 bg-[hsla(var(--main-col-bg)/1)]">
             <div className="flex flex-row justify-between items-center px-4 py-1">
                 <h1 className="px-2 py-4 text-xl font-[600] text-nowrap">{T.historyTitle}</h1>
-                <Button className="all-games-btn z-50" variant={'ghost'}>
+                <Button 
+                    className="all-games-btn z-50" 
+                    variant={'ghost'}
+                    onClick={() => navigate('/history')}
+                >
                     {T.allgamesbtn} {'>'}
                 </Button>
             </div>
             <div className="absolute top-0 right-0 w-[10%] h-full z-40 bg-gradient-to-r from-transparent to-[hsla(var(--main-col-bg)/1)] pointer-events-none"/>
-            <div className="relative flex flex-row flex-nowrap gap-2 overflow-hidden px-4 pb-4 w-max">
-                
+            <div className="relative flex flex-row flex-nowrap gap-2 overflow-x-auto px-4 pb-4 scrollbar-hide">
+                {gameHistory.length === 0 ? (
+                    <div className="flex items-center justify-center w-full py-8 text-[hsla(var(--foreground)/0.5)]">
+                        {T.noGamesYet || 'История игр пуста'}
+                    </div>
+                ) : (
+                    gameHistory.map((game, index) => (
+                        <ItemsGames
+                            key={game.id}
+                            id={index}
+                            object={JSON.stringify({
+                                id: index,
+                                amount: game.amount,
+                                side: game.side,
+                                result: game.status === 'win',
+                            })}
+                            side={game.side ? 1 : 0}
+                            className="flex-shrink-0"
+                        />
+                    ))
+                )}
             </div>
         </div>
         

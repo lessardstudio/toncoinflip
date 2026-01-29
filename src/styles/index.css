@@ -210,4 +210,14 @@ body {
 }
 .Toastify__close-button:hover, .Toastify__close-button :focus {
   opacity: 1 !important;
+}
+
+/* Скрытие скроллбара для истории игр */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE и Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari и Opera */
 }/*# sourceMappingURL=index.css.map */
