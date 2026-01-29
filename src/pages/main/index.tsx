@@ -11,7 +11,7 @@ import { CoinFlipContract } from "@/lib/contractWrapper";
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { toast } from "react-toastify";
 import { TonClient } from '@ton/ton';
-import { Address, beginCell, Cell } from '@ton/core';
+import { Address, beginCell, Cell, Message, Transaction } from '@ton/core';
 import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
 import { CoinFlipScene } from "@/components/animations/coinflip";
@@ -25,26 +25,16 @@ const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'EQDTu0cHyVvEa
 
 // Инициализируем TonClient
 const tonClient = new TonClient({
-    endpoint: import.meta.env.VITE_IS_TESTNET === 'true' 
-        ? 'https://testnet.toncenter.com/api/v2/jsonRPC'
-        : 'https://toncenter.com/api/v2/jsonRPC',
+    endpoint: import.meta.env.VITE_TON_ENDPOINT || (
+        import.meta.env.VITE_IS_TESTNET === 'true'
+            ? 'https://testnet.toncenter.com/api/v2/jsonRPC'
+            : 'https://toncenter.com/api/v2/jsonRPC'
+    ),
     apiKey: import.meta.env.VITE_TONCENTER_API_KEY
 });
 
-interface ExternalMessage {
-    info: {
-        type: string;
-    };
-    body?: string;
-}
-
-interface TonTransaction {
-    hash: {
-        toString(format: string): string;
-    };
-    lt: string | bigint;
-    inMessage?: ExternalMessage;
-}
+type ExternalMessage = Message;
+type TonTransaction = Transaction;
 
 
 
@@ -89,7 +79,7 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
 
                 if (extHash === inHash) {
                     console.log('Tx match');
-                    const txHash = tx.hash.toString('hex');
+                    const txHash = tx.hash().toString('hex');
                     // const hash = beginCell().store(storeMessage(tx as any)).endCell().hash().toString('hex');
                     console.log(`Transaction: ${extHash} ${txHash} `);
                     const lt = tx.lt.toString();
@@ -165,16 +155,16 @@ export default function MainPage() {
                     // Метод для получения транзакций
                     getTransactions: async (address: string, params: { limit: number; lt?: string; hash?: string }) => {
                         try {
-                            const response = await tonwebInstance.sendProviderRequest('getTransactions', {
-                                address,
+                            const parsed = Address.parse(address);
+                            const txs = await tonClient.getTransactions(parsed, {
                                 limit: params.limit,
                                 lt: params.lt,
                                 hash: params.hash,
                                 archival: true
                             });
-                            return { ok: true, result: response.result || [] };
+                            return { ok: true, result: txs || [] };
                         } catch (error) {
-                            console.error('Ошибка при получении транзакций:', error);
+                            console.error('Error while fetching transactions:', error);
                             return { ok: false, result: [] };
                         }
                     },
@@ -221,52 +211,157 @@ export default function MainPage() {
     
 
     // Проверка транзакции
+    const normalizeAddressForComparison = (addr: Address | string | null | undefined): string => {
+        if (!addr) return '';
+        try {
+            if (typeof addr === 'string') {
+                return Address.parse(addr).toRawString().toLowerCase();
+            }
+            return addr.toRawString().toLowerCase();
+        } catch {
+            return String(addr).toLowerCase();
+        }
+    };
+
+    const extractMessageText = (msg: Message | null | undefined): string => {
+        if (!msg) return '';
+        try {
+            const slice = msg.body.beginParse();
+            return slice.loadStringTail();
+        } catch {
+            try {
+                const slice = msg.body.beginParse();
+                const maybe = slice.loadMaybeStringTail();
+                return maybe || '';
+            } catch {
+                return '';
+            }
+        }
+    };
+
+    const toTon = (coins: bigint | undefined): number => {
+        if (typeof coins === 'undefined') return 0;
+        return Number(coins) / 1e9;
+    };
+
+    const getTransactionsWithTonClient = async (targetAddress: string, limit: number) => {
+        const parsed = Address.parse(targetAddress);
+        return await tonClient.getTransactions(parsed, { limit, archival: true });
+    };
+
+    // Transaction check
     const checkTransaction = async (txHash: string, address: string, lt: string): Promise<{status: string, amount: number}> => {
         try {
-            console.log('Входные параметры checkTransaction:', { txHash, address, lt });
+            console.log('checkTransaction input:', { txHash, address, lt });
 
             if (!contract) {
-                throw new Error('Контракт не инициализирован');
+                throw new Error('Contract is not initialized');
             }
 
             if (!txHash || txHash.trim() === '') {
-                throw new Error('Не указан хэш транзакции');
+                throw new Error('Transaction hash is missing');
             }
 
             if (!address || address.trim() === '') {
-                throw new Error('Не указан адрес');
+                throw new Error('Address is missing');
             }
 
-            // Формируем параметры запроса
-            const params: any = {
-                address: address.trim(),
-                limit: 1,
-                hash: txHash.trim(),
-                archival: true,
-            };
+            const contractAddress = CONTRACT_ADDRESS;
+            const limit = 10;
 
-            // Добавляем lt только если он не пустой
-            if (lt && lt.trim() !== '') {
-                params.to_lt = (Number(lt)).toString().trim();
-            }
+            console.log('TonClient query params (contract):', { address: contractAddress.trim(), limit });
 
-            console.log('Параметры запроса к API:', params);
-            const result = await tonwebInstance.sendProviderRequest('getTransactions', params);
-            console.log('Результат проверки транзакции:', result);
-            for (const tx of result.result) {
-                if (tx.in_msg.message.toLowerCase() === 'win' || tx.in_msg.message.toLowerCase() === 'lost') {
-                    return {status: tx.in_msg.message.toLowerCase(), amount: Number(tx.in_msg.value)/1e9}
+            let result: Transaction[] = [];
+            try {
+                result = await getTransactionsWithTonClient(contractAddress.trim(), limit);
+                console.log('Wallet transactions result:', result);
+            } catch (apiError: any) {
+                console.error('API error while fetching contract transactions:', apiError);
+                console.log('Retrying with user wallet transactions...');
+                try {
+                    result = await getTransactionsWithTonClient(address.trim(), limit);
+                    console.log('Wallet transactions result:', result);
+                } catch (retryError) {
+                    console.error('Error while fetching wallet transactions:', retryError);
+                    return {status: 'none', amount: 0};
                 }
             }
+
+            if (!Array.isArray(result)) {
+                console.warn('Unexpected TonClient response format:', result);
+                return {status: 'none', amount: 0};
+            }
+
+            const userAddressNormalized = normalizeAddressForComparison(address);
+            const contractAddressNormalized = normalizeAddressForComparison(CONTRACT_ADDRESS);
+            const minWinThreshold = 500000000n;
+
+            for (const tx of result) {
+                for (const [, outMsg] of tx.outMessages) {
+                    if (outMsg.info.type !== 'internal') continue;
+                    const destNormalized = normalizeAddressForComparison(outMsg.info.dest);
+                    if (destNormalized && destNormalized === userAddressNormalized) {
+                        const messageText = extractMessageText(outMsg);
+                        const messageLower = messageText.toLowerCase().trim();
+                        if (messageLower.includes('win') || messageLower.includes('lost')) {
+                            const amount = toTon(outMsg.info.value.coins);
+                            const status = messageLower.includes('win') ? 'win' : 'lost';
+                            console.log('Found result in outgoing message from contract:', {
+                                status,
+                                amount,
+                                message: messageText
+                            });
+                            return {status, amount};
+                        }
+
+                        if (outMsg.info.value.coins && outMsg.info.value.coins > minWinThreshold) {
+                            const amount = toTon(outMsg.info.value.coins);
+                            console.log('Found outgoing message with win amount:', {
+                                amount,
+                                message: messageText
+                            });
+                            return {status: 'win', amount};
+                        }
+                    }
+                }
+
+                if (tx.inMessage && tx.inMessage.info.type === 'internal') {
+                    const inMsg = tx.inMessage;
+                    const sourceNormalized = normalizeAddressForComparison(inMsg.info.src);
+                    if (sourceNormalized && sourceNormalized === contractAddressNormalized) {
+                        const messageText = extractMessageText(inMsg);
+                        const messageLower = messageText.toLowerCase().trim();
+                        if (messageLower.includes('win') || messageLower.includes('lost')) {
+                            const amount = toTon(inMsg.info.value.coins);
+                            const status = messageLower.includes('win') ? 'win' : 'lost';
+                            console.log('Found result in incoming message from contract:', {
+                                status,
+                                amount,
+                                message: messageText
+                            });
+                            return {status, amount};
+                        }
+
+                        if (inMsg.info.value.coins && inMsg.info.value.coins > minWinThreshold) {
+                            const amount = toTon(inMsg.info.value.coins);
+                            console.log('Found incoming message with win amount:', {
+                                amount,
+                                message: messageText
+                            });
+                            return {status: 'win', amount};
+                        }
+                    }
+                }
+            }
+
             return {status: 'none', amount: 0};
         } catch (error) {
-            console.error('Ошибка при проверке транзакции:', error);
-            throw error; // Пробрасываем ошибку дальше для обработки
+            console.error('Error while checking transaction:', error);
+            return {status: 'none', amount: 0};
         }
     };
-    
-    // Функция обновления баланса кошелька
-    const updateWalletBalance = async () => {
+
+const updateWalletBalance = async () => {
         try {
             // Если есть кошелек и контракт
             if (wallet && wallet.account && wallet.account.address && contract) {
@@ -372,43 +467,61 @@ export default function MainPage() {
             // Получаем хэш транзакции по BOC
             if (result.boc) {
                 setTxLoading(true);
-                const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
-                let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
-                while (res.status === 'none') {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
-                }
+                try {
+                    const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
+                    const maxAttempts = 60; // Максимум 30 секунд ожидания (60 * 500ms)
+                    let attempts = 0;
+                    let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
+                    
+                    while (res.status === 'none' && attempts < maxAttempts) {
+                        attempts++;
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
+                    }
 
-                if (res.status === 'win' || res.status === 'lost') {
-                    setTxLoading(false);
-                    setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
-                    setShowResult(true);
-                    setIsLoading(false);
-                    
-                    // Сохраняем игру в историю
-                    saveGameToHistory({
-                        amount: amount,
-                        side: side,
-                        status: res.status as 'win' | 'lost',
-                        winAmount: res.status === 'win' ? res.amount : undefined,
-                        txHash: tx.txHash,
-                    });
-                    
-                    // Обновляем историю для отображения
-                    setGameHistory(getRecentGames(10));
-                    
+                    if (res.status === 'win' || res.status === 'lost') {
+                        setTxLoading(false);
+                        setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
+                        setShowResult(true);
+                        setIsLoading(false);
+                        
+                        // Сохраняем игру в историю
+                        saveGameToHistory({
+                            amount: amount,
+                            side: side,
+                            status: res.status as 'win' | 'lost',
+                            winAmount: res.status === 'win' ? res.amount : undefined,
+                            txHash: tx.txHash,
+                        });
+                        
+                        // Обновляем историю для отображения
+                        setGameHistory(getRecentGames(10));
+                        
+                        await updateWalletBalance();
+                    } else if (attempts >= maxAttempts) {
+                        // Таймаут - транзакция не обработалась за отведенное время
+                        setTxLoading(false);
+                        setIsLoading(false);
+                        toast.error("Транзакция обрабатывается слишком долго. Проверьте результат позже.");
+                    }
                     await updateWalletBalance();
+                } catch (txError) {
+                    console.error("Ошибка при обработке транзакции:", txError);
+                    setTxLoading(false);
+                    setIsLoading(false);
+                    toast.error("Ошибка при проверке транзакции. Проверьте результат в истории кошелька.");
                 }
-                await updateWalletBalance();
+            } else {
+                setIsLoading(false);
+                toast.error("Не удалось получить данные транзакции");
             }
             
         } catch (error) {
             console.error("Ошибка при отправке транзакции:", error);
-            toast.error("Не удалось отправить транзакцию");
-        } finally {
-/*             setIsLoading(false);
+            setIsLoading(false);
             setTxLoading(false);
-            setShowResult(false); */
+            const errorMessage = error instanceof Error ? error.message : "Не удалось отправить транзакцию";
+            toast.error(errorMessage);
         }
     }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet]);
     
