@@ -98,11 +98,17 @@ class TonWebInstance {
 
                     const result = await response.json();
                     if (result.error) {
-                        console.error('Ошибка в ответе TON Center:', {
+                        const errorDetails = {
                             error: result.error,
-                            request
-                        });
-                        throw new Error(result.error.message || 'Unknown API error');
+                            request,
+                            responseBody: result
+                        };
+                        console.error('Ошибка в ответе TON Center:', errorDetails);
+                        // Пробрасываем ошибку с более подробной информацией
+                        const errorMessage = result.error.message || result.error.code || 'Unknown API error';
+                        const error = new Error(errorMessage);
+                        (error as any).details = errorDetails;
+                        throw error;
                     }
 
                     /* console.log('Успешный ответ от TON Center:', {

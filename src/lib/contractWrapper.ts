@@ -48,13 +48,13 @@ export class CoinFlipContract {
     private readonly contractAddress: string;
     private readonly tonConnectUI: any;
 
-    constructor(contractAddress: string, provider: ContractProvider, tonConnectUI: any) {
+    constructor(contractAddress: string, provider: ContractProvider | null | undefined, tonConnectUI: any) {
         if (!tonwebInstance.isValidAddress(contractAddress)) {
             throw new Error(`Invalid contract address: ${contractAddress}`);
         }
         // console.log('Provider type:', typeof provider);
-        // Добавьте проверку провайдера
-        if (!provider) throw new Error('Provider is required');
+        // Provider может быть недоступен до подключения кошелька.
+        // Для чтения балансов и отправки транзакции через TonConnectUI он не требуется.
         if (!tonConnectUI) throw new Error('TonConnectUI is required');
         
         /* console.log('CoinFlipContract constructor:', {

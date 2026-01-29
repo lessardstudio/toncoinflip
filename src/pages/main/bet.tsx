@@ -56,6 +56,11 @@ export default function BetBlock(){
             try {
                 // Получаем провайдер из TonConnect
                 const provider = tonConnectUI.connector?.wallet?.provider || null;
+
+                // Если кошелек не подключен или провайдера еще нет — просто пропускаем тик
+                if (!connected || !wallet?.account?.address || !provider) {
+                    return;
+                }
                 
                 // Проверяем тип провайдера и выводим отладочную информацию
                 // console.log("Тип провайдера:", typeof provider, provider);
