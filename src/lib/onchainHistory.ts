@@ -93,48 +93,88 @@ const findOutcome = (tx: Transaction, userAddressNormalized: string): { status: 
     return null;
 };
 
-export async function fetchOnchainHistory(walletAddress: string, limit: number = 50, contractAddress: string = CONTRACT_ADDRESS): Promise<GameHistoryItem[]> {
-    if (!walletAddress) return [];
+export async function fetchOnchainHistory(
+    walletAddress: string,
+    limit: number = 50,
+    contractAddress: string = CONTRACT_ADDRESS,
+    options?: { pageSize?: number; maxPages?: number; pageDelayMs?: number }
+): Promise<GameHistoryItem[]> {
+    if (!walletAddress || limit <= 0) return [];
 
     const contractParsed = Address.parse(contractAddress);
-    const transactions = await tonClient.getTransactions(contractParsed, { limit, archival: true });
-
     const userAddressNormalized = normalizeAddressForComparison(walletAddress);
     const history: GameHistoryItem[] = [];
 
-    for (const tx of transactions) {
-        if (!isInternalMessage(tx.inMessage)) {
-            continue;
-        }
+    const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? limit));
+    const inferredPages = Math.ceil(limit / pageSize);
+    const maxPages = Math.max(1, options?.maxPages ?? Math.min(12, inferredPages * 3));
+    const pageDelayMs = Math.max(0, options?.pageDelayMs ?? 150);
 
-        const srcNormalized = normalizeAddressForComparison(tx.inMessage.info.src);
-        if (!srcNormalized || srcNormalized !== userAddressNormalized) {
-            continue;
-        }
+    let lt: string | undefined;
+    let hash: string | undefined;
 
-        const side = parseFlipSide(tx.inMessage);
-        if (side === null) {
-            continue;
-        }
-
-        const outcome = findOutcome(tx, userAddressNormalized);
-        if (!outcome) {
-            continue;
-        }
-
-        const betAmount = toTon(tx.inMessage.info.value.coins);
-        const txHashHex = tx.hash().toString('hex');
-        const timestamp = tx.now * 1000;
-
-        history.push({
-            id: `${timestamp}-${txHashHex.slice(0, 8)}`,
-            timestamp,
-            amount: betAmount,
-            side,
-            status: outcome.status,
-            winAmount: outcome.status === 'win' ? outcome.winAmount : undefined,
-            txHash: txHashHex,
+    for (let page = 0; page < maxPages; page++) {
+        const transactions = await tonClient.getTransactions(contractParsed, {
+            limit: pageSize,
+            lt,
+            hash,
+            archival: true
         });
+
+        if (!transactions.length) {
+            break;
+        }
+
+        for (const tx of transactions) {
+            if (!isInternalMessage(tx.inMessage)) {
+                continue;
+            }
+
+            const srcNormalized = normalizeAddressForComparison(tx.inMessage.info.src);
+            if (!srcNormalized || srcNormalized !== userAddressNormalized) {
+                continue;
+            }
+
+            const side = parseFlipSide(tx.inMessage);
+            if (side === null) {
+                continue;
+            }
+
+            const outcome = findOutcome(tx, userAddressNormalized);
+            if (!outcome) {
+                continue;
+            }
+
+            const betAmount = toTon(tx.inMessage.info.value.coins);
+            const txHashHex = tx.hash().toString('hex');
+            const timestamp = tx.now * 1000;
+
+            history.push({
+                id: `${timestamp}-${txHashHex.slice(0, 8)}`,
+                timestamp,
+                amount: betAmount,
+                side,
+                status: outcome.status,
+                winAmount: outcome.status === 'win' ? outcome.winAmount : undefined,
+                txHash: txHashHex,
+            });
+
+            if (history.length >= limit) {
+                break;
+            }
+        }
+
+        if (history.length >= limit || transactions.length < pageSize) {
+            break;
+        }
+
+        const last = transactions[transactions.length - 1];
+        lt = last.lt.toString();
+        hash = last.hash().toString('base64');
+
+        if (pageDelayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, pageDelayMs));
+        }
     }
 
     return history;

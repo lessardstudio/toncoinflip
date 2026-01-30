@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/components/lang";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,33 +15,57 @@ export default function HistoryPage() {
     const connected = Boolean(wallet?.account?.address);
     const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
     const [stats, setStats] = useState(getGameStatsFromHistory([]));
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const inFlightRef = useRef(false);
+    const mountedRef = useRef(true);
 
-    useEffect(() => {
-        let cancelled = false;
-        const loadHistory = async () => {
-            if (!wallet?.account?.address) {
-                setGameHistory([]);
-                setStats(getGameStatsFromHistory([]));
-                return;
+    const loadHistory = useCallback(async () => {
+        const walletAddress = wallet?.account?.address?.toString();
+        if (!walletAddress) {
+            setGameHistory([]);
+            setStats(getGameStatsFromHistory([]));
+            return;
+        }
+        if (inFlightRef.current) {
+            return;
+        }
+        inFlightRef.current = true;
+        setIsRefreshing(true);
+        try {
+            const history = await fetchOnchainHistory(walletAddress, 200);
+            if (!mountedRef.current) return;
+            setGameHistory(history);
+            setStats(getGameStatsFromHistory(history));
+        } catch (error) {
+            console.error("Failed to load onchain history:", error);
+            if (!mountedRef.current) return;
+            setGameHistory([]);
+            setStats(getGameStatsFromHistory([]));
+        } finally {
+            inFlightRef.current = false;
+            if (mountedRef.current) {
+                setIsRefreshing(false);
             }
-            try {
-                const history = await fetchOnchainHistory(wallet.account.address.toString(), 200);
-                if (cancelled) return;
-                setGameHistory(history);
-                setStats(getGameStatsFromHistory(history));
-            } catch (error) {
-                console.error("Œ¯Ë·Í‡ ÔË Á‡„ÛÁÍÂ ËÒÚÓËË Ë„ ËÁ ˜ÂÈÌ‡:", error);
-                if (cancelled) return;
-                setGameHistory([]);
-                setStats(getGameStatsFromHistory([]));
-            }
-        };
-        loadHistory();
-        return () => {
-            cancelled = true;
-        };
+        }
     }, [wallet?.account?.address]);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        loadHistory();
+        return () => {
+            mountedRef.current = false;
+        };
+    }, [loadHistory]);
+
+    useEffect(() => {
+        if (!connected) return;
+        const intervalMs = 120000;
+        const intervalId = window.setInterval(() => {
+            if (document.hidden) return;
+            loadHistory();
+        }, intervalMs);
+        return () => window.clearInterval(intervalId);
+    }, [connected, loadHistory]);
 
     const formatDate = (timestamp: number) => {
         const date = new Date(timestamp);
@@ -70,10 +94,15 @@ export default function HistoryPage() {
                         className="flex items-center gap-2"
                     >
                         <ArrowLeft className="w-5 h-5" />
-                        {T.back || '–ù–∞–∑–∞–¥'}
+                        {T.back || 'Back'}
                     </Button>
-                    <h1 className="text-3xl font-bold">{T.fullHistoryTitle || '–ü–æ–ª–Ω–∞—è –∏—Å—Ç–æ—Ä–∏—è –∏–≥—Ä'}</h1>
+                    <h1 className="text-3xl font-bold">{T.fullHistoryTitle || 'Full game history'}</h1>
                 </div>
+                {connected && (
+                    <Button variant="ghost" onClick={loadHistory} disabled={isRefreshing}>
+                        {isRefreshing ? (T.loading || 'Loading...') : (T.refresh || 'Refresh')}
+                    </Button>
+                )}
             </div>
 
             {/* –°—Ç–∞—Ç–∏—Å—Ç–∏–∫–∞ */}
