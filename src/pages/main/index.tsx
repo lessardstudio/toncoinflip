@@ -6,12 +6,12 @@ import MoneyBag from '/tg_money_bag.webp'
 import MoneyWings from '/tg_money_with_wings.webp'
 import GemStone from '/tg_gem_stone.webp'
 import createBetTransaction from "@/components/tonweb/sendBetTransaction";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { CoinFlipContract } from "@/lib/contractWrapper";
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { toast } from "react-toastify";
 import { TonClient } from '@ton/ton';
-import { Address, beginCell, Cell, Message, Transaction } from '@ton/core';
+import { Address, beginCell, Cell, Message, Transaction, type CommonMessageInfoInternal } from '@ton/core';
 import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
 import { CoinFlipScene } from "@/components/animations/coinflip";
@@ -51,7 +51,7 @@ const retry = async (fn: () => Promise<any>, { retries = 30, delay = 1000 } = {}
 };
 
 // Функция для получения транзакции по BOC
-export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<{txHash: string, prevLT: number, lt: string, inMsg: ExternalMessage}> {
+export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<{txHash: string, prevLT: number, lt: string, inMsg: ExternalMessage, now: number}> {
     const myAddress = Address.parse(walletAddress);
 
     return retry(async () => {
@@ -75,7 +75,7 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
 
                 console.log(' hash BOC', extHash);
                 console.log('inMsg hash', inHash);
-                console.log('checking the tx', tx.hash.toString('base64'));
+                console.log('checking the tx', tx.hash().toString('base64'));
 
                 if (extHash === inHash) {
                     console.log('Tx match');
@@ -84,7 +84,7 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
                     console.log(`Transaction: ${extHash} ${txHash} `);
                     const lt = tx.lt.toString();
                     console.log(`Transaction LT: ${lt}`);
-                    return {txHash: extHash, prevLT: prevLT, lt: `${lt}`, inMsg: inMsg};
+                    return {txHash: extHash, prevLT: prevLT, lt: `${lt}`, inMsg: inMsg, now: tx.now};
                 }
             }
         }
@@ -98,6 +98,7 @@ export default function MainPage() {
     const wallet = useTonWallet();
     const navigate = useNavigate();
     const connected = Boolean(wallet?.account?.address);
+    const betInFlightRef = useRef(false);
     
     // Состояния приложения
     const [contract, setContract] = useState<CoinFlipContract | null>(null);
@@ -211,6 +212,10 @@ export default function MainPage() {
     
 
     // Проверка транзакции
+    const isInternalMessage = (msg: Message | null | undefined): msg is Message & { info: CommonMessageInfoInternal } => {
+        return Boolean(msg && msg.info.type === 'internal');
+    };
+
     const normalizeAddressForComparison = (addr: Address | string | null | undefined): string => {
         if (!addr) return '';
         try {
@@ -227,15 +232,21 @@ export default function MainPage() {
         if (!msg) return '';
         try {
             const slice = msg.body.beginParse();
-            return slice.loadStringTail();
-        } catch {
-            try {
-                const slice = msg.body.beginParse();
-                const maybe = slice.loadMaybeStringTail();
-                return maybe || '';
-            } catch {
-                return '';
+            if (slice.remainingBits >= 32) {
+                const op = slice.loadUint(32);
+                if (op === 0) {
+                    return slice.loadStringTail() || '';
+                }
             }
+        } catch {
+            // fall through
+        }
+        try {
+            const slice = msg.body.beginParse();
+            const maybe = slice.loadMaybeStringTail();
+            return maybe || '';
+        } catch {
+            return '';
         }
     };
 
@@ -250,9 +261,9 @@ export default function MainPage() {
     };
 
     // Transaction check
-    const checkTransaction = async (txHash: string, address: string, lt: string): Promise<{status: string, amount: number}> => {
+    const checkTransaction = async (txHash: string, address: string, lt: string, minNow?: number): Promise<{status: string, amount: number}> => {
         try {
-            console.log('checkTransaction input:', { txHash, address, lt });
+            console.log('checkTransaction input:', { txHash, address, lt, minNow });
 
             if (!contract) {
                 throw new Error('Contract is not initialized');
@@ -297,8 +308,11 @@ export default function MainPage() {
             const minWinThreshold = 500000000n;
 
             for (const tx of result) {
+                if (typeof minNow === 'number' && minNow > 0 && tx.now < minNow) {
+                    continue;
+                }
                 for (const [, outMsg] of tx.outMessages) {
-                    if (outMsg.info.type !== 'internal') continue;
+                    if (!isInternalMessage(outMsg)) continue;
                     const destNormalized = normalizeAddressForComparison(outMsg.info.dest);
                     if (destNormalized && destNormalized === userAddressNormalized) {
                         const messageText = extractMessageText(outMsg);
@@ -325,8 +339,8 @@ export default function MainPage() {
                     }
                 }
 
-                if (tx.inMessage && tx.inMessage.info.type === 'internal') {
-                    const inMsg = tx.inMessage;
+                const inMsg = tx.inMessage;
+                if (isInternalMessage(inMsg)) {
                     const sourceNormalized = normalizeAddressForComparison(inMsg.info.src);
                     if (sourceNormalized && sourceNormalized === contractAddressNormalized) {
                         const messageText = extractMessageText(inMsg);
@@ -421,13 +435,14 @@ const updateWalletBalance = async () => {
         
         // Проверка баланса кошелька (с учетом комиссии)
         if (wallet?.account?.address) {
-            const walletBalance = Number(tonwebInstance.getBalance(wallet?.account?.address?.toString()));
-            if (amount > walletBalance) {
-                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${walletBalance.toFixed(2)} TON`);
+            const cachedBalance = Number(localStorage.getItem('walletBalance') || localStorage.getItem('cachedWalletBalance') || 0);
+            const available = walletBalance > 0 ? walletBalance : (Number.isFinite(cachedBalance) ? cachedBalance : 0);
+            if (available > 0 && amount > available) {
+                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${available.toFixed(2)} TON`);
                 return false;
             }
         }
-        
+
         // Проверка максимальной ставки (1/5 от баланса контракта)
         const maxBet = contractBalance / 5;
         if (amount > maxBet) {
@@ -469,14 +484,15 @@ const updateWalletBalance = async () => {
                 setTxLoading(true);
                 try {
                     const tx = await getTxByBOC(result.boc, wallet.account.address.toString());
+                    const minNow = typeof tx.now === 'number' ? Math.max(0, tx.now - 5) : undefined;
                     const maxAttempts = 60; // Максимум 30 секунд ожидания (60 * 500ms)
                     let attempts = 0;
-                    let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
+                    let res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, minNow);
                     
                     while (res.status === 'none' && attempts < maxAttempts) {
                         attempts++;
                         await new Promise(resolve => setTimeout(resolve, 500));
-                        res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt);
+                        res = await checkTransaction(tx.txHash, wallet.account.address.toString(), tx.lt, minNow);
                     }
 
                     if (res.status === 'win' || res.status === 'lost') {
@@ -529,9 +545,14 @@ const updateWalletBalance = async () => {
     const sendBetTransaction = createBetTransaction(handleFlip);
     
     const handleBet = async () => {
+        if (betInFlightRef.current) {
+            toast.info("Подождите, транзакция выполняется");
+            return;
+        }
+
         const choseTon = localStorage.getItem('choseTon');
         const Bet = localStorage.getItem('bet');
-        
+
         if (!choseTon || !Bet) {
             toast.error("Выберите сторону и сумму ставки",
                 {
@@ -544,7 +565,7 @@ const updateWalletBalance = async () => {
             );
             return;
         }
-        
+
         if (!connected) {
             toast.error("Подключите кошелек для игры",
                 {
@@ -558,42 +579,38 @@ const updateWalletBalance = async () => {
             return;
         }
 
-        if (wallet?.account?.address) {
-            const amount = Number(localStorage.getItem('bet'));
-            await updateWalletBalance();
-            const walletBalance = Number(tonwebInstance.getBalance(wallet?.account?.address?.toString()));
-            if (walletBalance && amount > walletBalance) {
-                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${walletBalance.toFixed(2)} TON`,
-                {
-                    position: "top-center",
-                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                }
-            );
-                return;
-            } else if(localStorage.getItem('cachedWalletBalance') && amount > Number(localStorage.getItem('walletBalance'))) {
-                toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${localStorage.getItem('cachedWalletBalance')} TON`,
-                {
-                    position: "top-center",
-                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                }
-            );
-                return;
-            }
+        const amount = Number(Bet);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            toast.error("Некорректная сумма ставки");
+            return;
         }
-        
+
+        const cachedBalance = Number(localStorage.getItem('walletBalance') || localStorage.getItem('cachedWalletBalance') || 0);
+        const available = walletBalance > 0 ? walletBalance : (Number.isFinite(cachedBalance) ? cachedBalance : 0);
+        if (available > 0 && amount > available) {
+            toast.error(`Недостаточно средств в кошельке. Нужно: ${amount} TON, доступно: ${available.toFixed(2)} TON`,
+                {
+                    position: "top-center",
+                    autoClose: 5000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                }
+            );
+            return;
+        }
+
         if (isLoading) {
             toast.info("Подождите, транзакция выполняется");
             return;
         }
 
-        
-        sendBetTransaction(Number(choseTon), Number(Bet));
+        betInFlightRef.current = true;
+        try {
+            await sendBetTransaction(Number(choseTon), amount);
+        } finally {
+            betInFlightRef.current = false;
+        }
     };
 
     // Компонент для отображения результата
@@ -737,4 +754,11 @@ const updateWalletBalance = async () => {
         </>
     );
 }
+
+
+
+
+
+
+
 
