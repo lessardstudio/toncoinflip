@@ -37,8 +37,6 @@ const tonClient = new TonClient({
 type ExternalMessage = Message;
 type TonTransaction = Transaction;
 
-
-
 // Функция для повторных попыток
 const retry = async (fn: () => Promise<any>, { retries = 30, delay = 1000 } = {}) => {
     for (let i = 0; i < retries; i++) {
@@ -92,6 +90,60 @@ export async function getTxByBOC(exBoc: string, walletAddress: string): Promise<
         throw new Error('Transaction not found');
     });
 }
+
+type ResultModalProps = {
+    showResult: boolean;
+    txloading: boolean;
+    lastFlipResult: { status: string; amount: number; side: boolean; winAmount: number } | null;
+    T: any;
+    onClose: () => void;
+};
+
+const ResultModal = ({ showResult, txloading, lastFlipResult, T, onClose }: ResultModalProps) => {
+    if (!showResult && txloading) return (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div className="flex flex-col items-center justify-center bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
+                <h2 className="text-2xl font-bold mb-4">
+                    {T.transactionProcessing}
+                </h2>
+                <img src={GemStone} alt="GemStone" width="100" height="100" />
+            </div>
+        </div>
+    );
+    else if (!showResult) return null;
+
+    const isWin = lastFlipResult?.status === 'win';
+    const sideName = lastFlipResult?.side ? T.bet2 : T.bet1;
+
+    return (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div className="relative bg-[hsla(var(--main-col-bg)/1)] rounded-3xl max-w-md w-full text-center">
+                <h2 className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl text-[50px] font-bold z-50 opacity-0 animate-[fadeIn_500ms_ease-in-out_3000ms_forwards] cursor-none select-none">
+                    {isWin ? ` ${T.win.toUpperCase()}` : ` ${T.lost.toUpperCase()}`}
+                </h2>
+
+                <div className="opacity-1 animate-[fadeOut05_1000ms_ease-in-out_2500ms_forwards]">
+                    <CoinFlipScene isWin={isWin} side={lastFlipResult?.side ?? false}/>
+                </div>
+                <p className="mb-4">
+                    {T.betPrefix}: <span className="font-bold">{lastFlipResult?.amount} TON</span> {T.onPrefix} <span className="font-bold">{sideName}</span>
+                </p>
+                {isWin && (
+                    <p className="text-xl text-green-500 font-bold mb-4 opacity-0 animate-[fadeIn_500ms_ease-in-out_3500ms_forwards]">
+                        {T.winAmountPrefix}: {lastFlipResult?.winAmount} TON
+                    </p>
+                )}
+
+                <button
+                    className="bg-[hsla(var(--main-col)/1)] text-[hsl(var(--main-col-bg))] px-6 py-2 rounded-xl mb-8"
+                    onClick={onClose}
+                >
+                    {T.continueBtnFromResult}
+                </button>
+            </div>
+        </div>
+    );
+};
 
 export default function MainPage() {
     const { translations: T } = useTranslation();
@@ -244,9 +296,6 @@ export default function MainPage() {
             }
         };
     }, []);
-
-
-    
 
     // Проверка транзакции
     const isInternalMessage = (msg: Message | null | undefined): msg is Message & { info: CommonMessageInfoInternal } => {
@@ -642,53 +691,6 @@ const updateWalletBalance = async () => {
         }
     };
 
-    // Компонент для отображения результата
-    const ResultModal = () => {
-        if (!showResult && txloading) return (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                <div className="flex flex-col items-center justify-center bg-[hsla(var(--main-col-bg)/1)] p-8 rounded-3xl max-w-md w-full text-center">
-                    <h2 className="text-2xl font-bold mb-4">
-                        {T.transactionProcessing}
-                    </h2>
-                    <img src={GemStone} alt="GemStone" width="100" height="100" />
-                    
-                </div>
-            </div>
-        );
-        else if (!showResult) return null;
-        
-        const isWin = lastFlipResult?.status === 'win';
-        const sideName = lastFlipResult?.side ? T.bet2 : T.bet1;
-        
-        return (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                <div className="relative bg-[hsla(var(--main-col-bg)/1)] rounded-3xl max-w-md w-full text-center">
-                    <h2 className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl text-[50px] font-bold z-50 opacity-0 animate-[fadeIn_500ms_ease-in-out_3000ms_forwards] cursor-none select-none">
-                        {isWin ? ` ${T.win.toUpperCase()}` : ` ${T.lost.toUpperCase()}`}
-                    </h2>
-
-                    <div className="opacity-1 animate-[fadeOut05_1000ms_ease-in-out_2500ms_forwards]">
-                        <CoinFlipScene isWin={isWin} side={lastFlipResult?.side ?? false}/>
-                    </div>
-                    <p className="mb-4">
-                        {T.betPrefix}: <span className="font-bold">{lastFlipResult?.amount} TON</span> {T.onPrefix} <span className="font-bold">{sideName}</span>
-                    </p>
-                    {isWin && (
-                        <p className="text-xl text-green-500 font-bold mb-4 opacity-0 animate-[fadeIn_500ms_ease-in-out_3500ms_forwards]">
-                            {T.winAmountPrefix}: {lastFlipResult?.winAmount} TON
-                        </p>
-                    )}
-      
-                    <button 
-                        className="bg-[hsla(var(--main-col)/1)] text-[hsl(var(--main-col-bg))] px-6 py-2 rounded-xl mb-8"
-                        onClick={closeResult}
-                    >
-                        {T.continueBtnFromResult}
-                    </button>
-                </div>
-            </div>
-        );
-    };
 
     const isMobile = window.innerWidth <= 768;
     return (
@@ -705,7 +707,6 @@ const updateWalletBalance = async () => {
             </div>
 
             <ChoseItem/>
-
 
             <div className="flex flex-col justify-arround items-center text-[hsl(var(--foreground))]
                             bg-foreground-6per px-8 py-8 rounded-[50px] font-['Inter'] font-[600] text-xl min-w-[200px]">
@@ -727,8 +728,6 @@ const updateWalletBalance = async () => {
                 </div>
             </div>
 
-
-
         </div>
         <div className="flex flex-col justify-center items-center gap-2 flex-wrap sm:flex-row lg:flex-nowrap">
             <img className="relative top-2" src={GemStone} alt="GemStone" width="100" height="100" />
@@ -740,7 +739,6 @@ const updateWalletBalance = async () => {
             <img className="relative top-2" src={MoneyBag} alt="MoneyBag" width="100" height="100" />
 
         </div>
-
 
         <div className="relative history flex flex-col rounded-[25px] overflow-hidden my-4 bg-[hsla(var(--main-col-bg)/1)]">
             <div className="flex flex-row justify-between items-center px-4 py-1">
@@ -779,15 +777,8 @@ const updateWalletBalance = async () => {
         </div>
         
         {/* Модальное окно результата */}
-        <ResultModal />
+        <ResultModal showResult={showResult} txloading={txloading} lastFlipResult={lastFlipResult} T={T} onClose={closeResult} />
         </>
     );
 }
-
-
-
-
-
-
-
 
