@@ -80,7 +80,17 @@ export function getGameStats(): {
   totalWagered: number;
   totalWon: number;
 } {
-  const history = getGameHistory();
+  return getGameStatsFromHistory(getGameHistory());
+}
+
+// РџРѕР»СѓС‡РµРЅРёРµ СЃС‚Р°С‚РёСЃС‚РёРєРё РёР· СЃРїРёСЃРєР° РёСЃС‚РѕСЂРёРё
+export function getGameStatsFromHistory(history: GameHistoryItem[]): {
+  totalGames: number;
+  wins: number;
+  losses: number;
+  totalWagered: number;
+  totalWon: number;
+} {
   const wins = history.filter(game => game.status === 'win').length;
   const losses = history.filter(game => game.status === 'lost').length;
   const totalWagered = history.reduce((sum, game) => sum + game.amount, 0);

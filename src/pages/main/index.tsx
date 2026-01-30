@@ -15,7 +15,8 @@ import { Address, beginCell, Cell, Message, Transaction, type CommonMessageInfoI
 import { storeMessage } from '@ton/core';
 import tonwebInstance from '@/lib/tonwebInstance';
 import { CoinFlipScene } from "@/components/animations/coinflip";
-import { saveGameToHistory, getRecentGames, GameHistoryItem } from "@/lib/utils";
+import { GameHistoryItem } from "@/lib/utils";
+import { fetchOnchainHistory } from "@/lib/onchainHistory";
 import { ItemsGames } from "./itemgames";
 import { useNavigate } from "react-router-dom";
 import './style.css';
@@ -204,9 +205,26 @@ export default function MainPage() {
     }, [connected, tonConnectUI, wallet]);
 
     // Загружаем историю игр при монтировании компонента
+    const refreshHistory = useCallback(async (limit: number = 10) => {
+        if (!wallet?.account?.address) {
+            setGameHistory([]);
+            return;
+        }
+        try {
+            const history = await fetchOnchainHistory(wallet.account.address.toString(), limit, CONTRACT_ADDRESS);
+            setGameHistory(history);
+        } catch (error) {
+            console.error('Ошибка при загрузке истории игр из чейна:', error);
+        }
+    }, [wallet?.account?.address]);
+
     useEffect(() => {
-        setGameHistory(getRecentGames(10));
-    }, []);
+        if (!connected || !wallet?.account?.address) {
+            setGameHistory([]);
+            return;
+        }
+        refreshHistory(10);
+    }, [connected, wallet?.account?.address, refreshHistory]);
 
 
     
@@ -459,7 +477,7 @@ const updateWalletBalance = async () => {
         setLastFlipResult(null);
         setTxLoading(false);
         // Обновляем историю после закрытия модального окна
-        setGameHistory(getRecentGames(10));
+        refreshHistory(10);
     };
     
     // Функция для обработки ставки
@@ -500,19 +518,7 @@ const updateWalletBalance = async () => {
                         setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
                         setShowResult(true);
                         setIsLoading(false);
-                        
-                        // Сохраняем игру в историю
-                        saveGameToHistory({
-                            amount: amount,
-                            side: side,
-                            status: res.status as 'win' | 'lost',
-                            winAmount: res.status === 'win' ? res.amount : undefined,
-                            txHash: tx.txHash,
-                        });
-                        
-                        // Обновляем историю для отображения
-                        setGameHistory(getRecentGames(10));
-                        
+                        await refreshHistory(10);
                         await updateWalletBalance();
                     } else if (attempts >= maxAttempts) {
                         // Таймаут - транзакция не обработалась за отведенное время
@@ -539,7 +545,7 @@ const updateWalletBalance = async () => {
             const errorMessage = error instanceof Error ? error.message : "Не удалось отправить транзакцию";
             toast.error(errorMessage);
         }
-    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet]);
+    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet, refreshHistory]);
     
     // Создаем функцию отправки ставки
     const sendBetTransaction = createBetTransaction(handleFlip);

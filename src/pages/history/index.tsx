@@ -3,28 +3,45 @@ import { useTranslation } from "@/components/lang";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ItemsGames } from "../main/itemgames";
-import { getGameHistory, clearGameHistory, getGameStats, GameHistoryItem } from "@/lib/utils";
+import { GameHistoryItem, getGameStatsFromHistory } from "@/lib/utils";
+import { fetchOnchainHistory } from "@/lib/onchainHistory";
 import { ArrowLeft } from "lucide-react";
+import { useTonWallet } from '@tonconnect/ui-react';
 
 export default function HistoryPage() {
     const { translations: T } = useTranslation();
     const navigate = useNavigate();
+    const wallet = useTonWallet();
+    const connected = Boolean(wallet?.account?.address);
     const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
-    const [stats, setStats] = useState(getGameStats());
+    const [stats, setStats] = useState(getGameStatsFromHistory([]));
 
     useEffect(() => {
-        const history = getGameHistory();
-        setGameHistory(history);
-        setStats(getGameStats());
-    }, []);
+        let cancelled = false;
+        const loadHistory = async () => {
+            if (!wallet?.account?.address) {
+                setGameHistory([]);
+                setStats(getGameStatsFromHistory([]));
+                return;
+            }
+            try {
+                const history = await fetchOnchainHistory(wallet.account.address.toString(), 200);
+                if (cancelled) return;
+                setGameHistory(history);
+                setStats(getGameStatsFromHistory(history));
+            } catch (error) {
+                console.error("Ошибка при загрузке истории игр из чейна:", error);
+                if (cancelled) return;
+                setGameHistory([]);
+                setStats(getGameStatsFromHistory([]));
+            }
+        };
+        loadHistory();
+        return () => {
+            cancelled = true;
+        };
+    }, [wallet?.account?.address]);
 
-    const handleClearHistory = () => {
-        if (window.confirm(T.clearHistoryConfirm || 'Р’С‹ СѓРІРµСЂРµРЅС‹, С‡С‚Рѕ С…РѕС‚РёС‚Рµ РѕС‡РёСЃС‚РёС‚СЊ РёСЃС‚РѕСЂРёСЋ РёРіСЂ?')) {
-            clearGameHistory();
-            setGameHistory([]);
-            setStats(getGameStats());
-        }
-    };
 
     const formatDate = (timestamp: number) => {
         const date = new Date(timestamp);
@@ -57,14 +74,6 @@ export default function HistoryPage() {
                     </Button>
                     <h1 className="text-3xl font-bold">{T.fullHistoryTitle || 'РџРѕР»РЅР°СЏ РёСЃС‚РѕСЂРёСЏ РёРіСЂ'}</h1>
                 </div>
-                {gameHistory.length > 0 && (
-                    <Button
-                        variant="destructive"
-                        onClick={handleClearHistory}
-                    >
-                        {T.clearHistory || 'РћС‡РёСЃС‚РёС‚СЊ РёСЃС‚РѕСЂРёСЋ'}
-                    </Button>
-                )}
             </div>
 
             {/* РЎС‚Р°С‚РёСЃС‚РёРєР° */}
@@ -93,7 +102,9 @@ export default function HistoryPage() {
             {gameHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 bg-[hsla(var(--main-col-bg)/1)] rounded-xl">
                     <p className="text-xl text-[hsla(var(--foreground)/0.5)] mb-4">
-                        {T.noGamesYet || 'РСЃС‚РѕСЂРёСЏ РёРіСЂ РїСѓСЃС‚Р°'}
+                        {connected
+                            ? (T.noGamesYet || 'История игр пуста')
+                            : (T.connectWalletHistory || 'Подключите кошелек, чтобы увидеть историю')}
                     </p>
                     <Button onClick={() => navigate('/')}>
                         {T.goToGame || 'РџРµСЂРµР№С‚Рё Рє РёРіСЂРµ'}
