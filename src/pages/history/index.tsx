@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ItemsGames } from "../main/itemgames";
 import { GameHistoryItem, getGameStatsFromHistory } from "@/lib/utils";
-import { fetchOnchainHistory } from "@/lib/onchainHistory";
+import { fetchOnchainHistory, fetchOnchainStats } from "@/lib/onchainHistory";
 import { ArrowLeft } from "lucide-react";
 import { useTonWallet } from '@tonconnect/ui-react';
 
@@ -19,7 +19,7 @@ export default function HistoryPage() {
     const inFlightRef = useRef(false);
     const mountedRef = useRef(true);
 
-    const loadHistory = useCallback(async () => {
+    const loadHistory = useCallback(async (includeStats: boolean = true) => {
         const walletAddress = wallet?.account?.address?.toString();
         if (!walletAddress) {
             setGameHistory([]);
@@ -35,12 +35,18 @@ export default function HistoryPage() {
             const history = await fetchOnchainHistory(walletAddress, 200);
             if (!mountedRef.current) return;
             setGameHistory(history);
-            setStats(getGameStatsFromHistory(history));
+            if (includeStats) {
+                const totals = await fetchOnchainStats(walletAddress);
+                if (!mountedRef.current) return;
+                setStats(totals);
+            }
         } catch (error) {
             console.error("Failed to load onchain history:", error);
             if (!mountedRef.current) return;
             setGameHistory([]);
-            setStats(getGameStatsFromHistory([]));
+            if (includeStats) {
+                setStats(getGameStatsFromHistory([]));
+            }
         } finally {
             inFlightRef.current = false;
             if (mountedRef.current) {
@@ -51,7 +57,7 @@ export default function HistoryPage() {
 
     useEffect(() => {
         mountedRef.current = true;
-        loadHistory();
+        loadHistory(true);
         return () => {
             mountedRef.current = false;
         };
@@ -62,7 +68,7 @@ export default function HistoryPage() {
         const intervalMs = 120000;
         const intervalId = window.setInterval(() => {
             if (document.hidden) return;
-            loadHistory();
+            loadHistory(false);
         }, intervalMs);
         return () => window.clearInterval(intervalId);
     }, [connected, loadHistory]);
@@ -99,7 +105,7 @@ export default function HistoryPage() {
                     <h1 className="text-3xl font-bold">{T.fullHistoryTitle || 'Full game history'}</h1>
                 </div>
                 {connected && (
-                    <Button variant="ghost" onClick={loadHistory} disabled={isRefreshing}>
+                    <Button variant="ghost" onClick={() => loadHistory(true)} disabled={isRefreshing}>
                         {isRefreshing ? (T.loading || 'Loading...') : (T.refresh || 'Refresh')}
                     </Button>
                 )}

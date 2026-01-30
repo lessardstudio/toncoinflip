@@ -179,3 +179,94 @@ export async function fetchOnchainHistory(
 
     return history;
 }
+
+export async function fetchOnchainStats(
+    walletAddress: string,
+    contractAddress: string = CONTRACT_ADDRESS,
+    options?: { pageSize?: number; maxPages?: number; pageDelayMs?: number }
+): Promise<{
+    totalGames: number;
+    wins: number;
+    losses: number;
+    totalWagered: number;
+    totalWon: number;
+}> {
+    const empty = {
+        totalGames: 0,
+        wins: 0,
+        losses: 0,
+        totalWagered: 0,
+        totalWon: 0,
+    };
+
+    if (!walletAddress) return empty;
+
+    const contractParsed = Address.parse(contractAddress);
+    const userAddressNormalized = normalizeAddressForComparison(walletAddress);
+
+    const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? 50));
+    const maxPages = Math.max(1, options?.maxPages ?? 1000);
+    const pageDelayMs = Math.max(0, options?.pageDelayMs ?? 150);
+
+    let lt: string | undefined;
+    let hash: string | undefined;
+
+    for (let page = 0; page < maxPages; page++) {
+        const transactions = await tonClient.getTransactions(contractParsed, {
+            limit: pageSize,
+            lt,
+            hash,
+            archival: true
+        });
+
+        if (!transactions.length) {
+            break;
+        }
+
+        for (const tx of transactions) {
+            if (!isInternalMessage(tx.inMessage)) {
+                continue;
+            }
+
+            const srcNormalized = normalizeAddressForComparison(tx.inMessage.info.src);
+            if (!srcNormalized || srcNormalized !== userAddressNormalized) {
+                continue;
+            }
+
+            const side = parseFlipSide(tx.inMessage);
+            if (side === null) {
+                continue;
+            }
+
+            const outcome = findOutcome(tx, userAddressNormalized);
+            if (!outcome) {
+                continue;
+            }
+
+            const betAmount = toTon(tx.inMessage.info.value.coins);
+            empty.totalGames += 1;
+            empty.totalWagered += betAmount;
+
+            if (outcome.status === 'win') {
+                empty.wins += 1;
+                empty.totalWon += outcome.winAmount;
+            } else {
+                empty.losses += 1;
+            }
+        }
+
+        if (transactions.length < pageSize) {
+            break;
+        }
+
+        const last = transactions[transactions.length - 1];
+        lt = last.lt.toString();
+        hash = last.hash().toString('base64');
+
+        if (pageDelayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, pageDelayMs));
+        }
+    }
+
+    return empty;
+}
