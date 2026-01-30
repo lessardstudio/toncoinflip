@@ -58,7 +58,12 @@ export const WalletObj: React.FC = () => {
     
     // Получаем баланс кошелька из localStorage
     useEffect(() => {
+        let inFlight = false;
         const fetchBalance = async () => {
+            if (inFlight) {
+                return;
+            }
+            inFlight = true;
             try {
                 if (!wallet) return;
                 const balance = await tonwebInstance.getBalance(wallet.account.address);
@@ -66,12 +71,14 @@ export const WalletObj: React.FC = () => {
                 localStorage.setItem('cachedWalletBalance', balance);
             } catch (error) {
                 console.error('Ошибка получения баланса:', error);
+            } finally {
+                inFlight = false;
             }
         };
         
         if (wallet) {
             fetchBalance();
-            const interval = setInterval(fetchBalance, 10000);
+            const interval = setInterval(fetchBalance, 15000);
             return () => clearInterval(interval);
         }
     }, [wallet]);

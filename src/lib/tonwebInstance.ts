@@ -55,78 +55,120 @@ class TonWebInstance {
             
             const TonWebLib = TonWeb as TonWebType;
             this.provider = new TonWebLib.HttpProvider(endpoint, options);
+            const envMaxRetries = Number(import.meta.env.VITE_TONCENTER_MAX_RETRIES);
+            const envBaseDelayMs = Number(import.meta.env.VITE_TONCENTER_RETRY_DELAY_MS);
+            const envMaxDelayMs = Number(import.meta.env.VITE_TONCENTER_RETRY_MAX_DELAY_MS);
+
+            const maxRetries = Number.isFinite(envMaxRetries) ? Math.max(0, Math.floor(envMaxRetries)) : 4;
+            const baseRetryDelayMs = Number.isFinite(envBaseDelayMs) ? Math.max(100, envBaseDelayMs) : 500;
+            const maxRetryDelayMs = Number.isFinite(envMaxDelayMs) ? Math.max(baseRetryDelayMs, envMaxDelayMs) : 8000;
+
+            const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+            const parseRetryAfterMs = (value: string | null): number | null => {
+                if (!value) return null;
+                const seconds = Number(value);
+                if (Number.isFinite(seconds)) {
+                    return Math.max(0, seconds * 1000);
+                }
+                const dateMs = Date.parse(value);
+                if (!Number.isNaN(dateMs)) {
+                    return Math.max(0, dateMs - Date.now());
+                }
+                return null;
+            };
+
+            const getRetryDelayMs = (attempt: number, retryAfter: string | null): number => {
+                const retryAfterMs = parseRetryAfterMs(retryAfter);
+                const expDelay = Math.min(maxRetryDelayMs, baseRetryDelayMs * Math.pow(2, attempt));
+                const jitter = Math.floor(Math.random() * 250);
+                if (retryAfterMs !== null) {
+                    return Math.min(maxRetryDelayMs, Math.max(expDelay, retryAfterMs)) + jitter;
+                }
+                return expDelay + jitter;
+            };
+
+            const isRetryableStatus = (status: number) => status === 429 || status === 503;
+
             
             // Добавляем обработчик ошибок для провайдера
             this.provider.sendImpl = async (apiUrl: string, request: any) => {
-                try {
-                    // Форматируем параметры запроса
-                    if (request.method === 'getAddressBalance' && request.params?.address) {
-                        // Убеждаемся, что адрес в правильном формате
-                        const address = request.params.address;
-                        if (typeof address === 'string') {
-                            // Если адрес начинается с EQ или UQ, конвертируем его
-                            if (address.startsWith('EQ') || address.startsWith('UQ')) {
-                                const normalizedAddress = this.normalizeAddress(address);
-                                request.params.address = normalizedAddress;
+                const maxAttempts = Math.max(1, maxRetries + 1);
+
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    const isLastAttempt = attempt === maxAttempts - 1;
+
+                    try {
+                        if (request.method === 'getAddressBalance' && request.params?.address) {
+                            const address = request.params.address;
+                            if (typeof address === 'string') {
+                                if (address.startsWith('EQ') || address.startsWith('UQ')) {
+                                    const normalizedAddress = this.normalizeAddress(address);
+                                    request.params.address = normalizedAddress;
+                                }
                             }
                         }
-                    }
 
-                    /* console.log('Отправка запроса к TON Center:', {
-                        apiUrl,
-                        method: request.method,
-                        params: request.params
-                    }); */
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-API-Key': options.apiKey
-                        },
-                        body: JSON.stringify(request)
-                    });
-
-                    if (!response.ok) {
-                        console.error('Ошибка ответа от TON Center:', {
-                            status: response.status,
-                            statusText: response.statusText,
-                            request
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-API-Key': options.apiKey
+                            },
+                            body: JSON.stringify(request)
                         });
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
 
-                    const result = await response.json();
-                    if (result.error) {
-                        const errorDetails = {
-                            error: result.error,
+                        if (!response.ok) {
+                            const shouldRetry = isRetryableStatus(response.status) && !isLastAttempt;
+                            if (shouldRetry) {
+                                const delayMs = getRetryDelayMs(attempt, response.headers.get('Retry-After'));
+                                await sleep(delayMs);
+                                continue;
+                            }
+                            const error = new Error(`HTTP error! status: ${response.status}`);
+                            (error as any).details = {
+                                status: response.status,
+                                statusText: response.statusText,
+                                request
+                            };
+                            (error as any).nonRetryable = true;
+                            throw error;
+                        }
+
+                        const result = await response.json();
+                        if (result.error) {
+                            const errorDetails = {
+                                error: result.error,
+                                request,
+                                responseBody: result
+                            };
+                            const errorMessage = result.error.message || result.error.code || 'Unknown API error';
+                            const error = new Error(errorMessage);
+                            (error as any).details = errorDetails;
+                            (error as any).nonRetryable = true;
+                            throw error;
+                        }
+
+                        return result;
+                    } catch (error) {
+                        const isNonRetryable = (error as any)?.nonRetryable === true;
+                        if (!isNonRetryable && !isLastAttempt) {
+                            const delayMs = getRetryDelayMs(attempt, null);
+                            await sleep(delayMs);
+                            continue;
+                        }
+                        console.error('TON Center request failed:', {
+                            apiUrl,
+                            error: error instanceof Error ? error.message : 'Unknown error',
                             request,
-                            responseBody: result
-                        };
-                        console.error('Ошибка в ответе TON Center:', errorDetails);
-                        // Пробрасываем ошибку с более подробной информацией
-                        const errorMessage = result.error.message || result.error.code || 'Unknown API error';
-                        const error = new Error(errorMessage);
-                        (error as any).details = errorDetails;
+                            details: (error as any)?.details
+                        });
                         throw error;
                     }
-
-                    /* console.log('Успешный ответ от TON Center:', {
-                        method: request.method,
-                        result
-                    }); */
-
-                    return result;
-                } catch (error) {
-                    console.error('Ошибка при отправке запроса к TON Center:', {
-                        apiUrl,
-                        error: error instanceof Error ? error.message : 'Unknown error',
-                        request
-                    });
-                    throw error;
                 }
-            };
 
+                throw new Error('TON Center request failed');
+            };
             this.tonweb = new TonWebLib(this.provider);
             // console.log('TonWeb успешно инициализирован');
         } catch (error) {

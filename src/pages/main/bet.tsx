@@ -52,7 +52,12 @@ export default function BetBlock(){
     
     // Получаем баланс контракта и кошелька через contractWrapper
     useEffect(() => {
+        let inFlight = false;
         const fetchBalances = async () => {
+            if (inFlight) {
+                return;
+            }
+            inFlight = true;
             try {
                 // Получаем провайдер из TonConnect
                 const provider = tonConnectUI.connector?.wallet?.provider || null;
@@ -113,16 +118,18 @@ export default function BetBlock(){
                     errorMessage: error instanceof Error ? error.message : 'Неизвестная ошибка',
                     errorStack: error instanceof Error ? error.stack : undefined
                 });
+            } finally {
+                inFlight = false;
             }
         };
         
         // Сразу получаем начальные данные
         fetchBalances();
         
-        // И устанавливаем интервал для обновления каждые 2 секунды
+        // Poll balances less frequently to avoid rate limits
         const intervalId = setInterval(() => {
             fetchBalances();
-        }, 2000);
+        }, 10000);
         
         // Очищаем интервал при размонтировании компонента
         return () => clearInterval(intervalId);
