@@ -100,6 +100,7 @@ export default function MainPage() {
     const navigate = useNavigate();
     const connected = Boolean(wallet?.account?.address);
     const betInFlightRef = useRef(false);
+    const historyRefreshTimeoutRef = useRef<number | null>(null);
     
     // Состояния приложения
     const [contract, setContract] = useState<CoinFlipContract | null>(null);
@@ -225,6 +226,24 @@ export default function MainPage() {
         }
         refreshHistory(10);
     }, [connected, wallet?.account?.address, refreshHistory]);
+
+    const scheduleHistoryRefresh = useCallback((delayMs: number = 3500) => {
+        if (historyRefreshTimeoutRef.current !== null) {
+            window.clearTimeout(historyRefreshTimeoutRef.current);
+        }
+        historyRefreshTimeoutRef.current = window.setTimeout(() => {
+            refreshHistory(10);
+            historyRefreshTimeoutRef.current = null;
+        }, delayMs);
+    }, [refreshHistory]);
+
+    useEffect(() => {
+        return () => {
+            if (historyRefreshTimeoutRef.current !== null) {
+                window.clearTimeout(historyRefreshTimeoutRef.current);
+            }
+        };
+    }, []);
 
 
     
@@ -477,6 +496,10 @@ const updateWalletBalance = async () => {
         setLastFlipResult(null);
         setTxLoading(false);
         // Обновляем историю после закрытия модального окна
+        if (historyRefreshTimeoutRef.current !== null) {
+            window.clearTimeout(historyRefreshTimeoutRef.current);
+            historyRefreshTimeoutRef.current = null;
+        }
         refreshHistory(10);
     };
     
@@ -518,7 +541,7 @@ const updateWalletBalance = async () => {
                         setLastFlipResult({status: res.status, amount: amount, side: side, winAmount: res.amount});
                         setShowResult(true);
                         setIsLoading(false);
-                        await refreshHistory(10);
+                        scheduleHistoryRefresh();
                         await updateWalletBalance();
                     } else if (attempts >= maxAttempts) {
                         // Таймаут - транзакция не обработалась за отведенное время
@@ -545,7 +568,7 @@ const updateWalletBalance = async () => {
             const errorMessage = error instanceof Error ? error.message : "Не удалось отправить транзакцию";
             toast.error(errorMessage);
         }
-    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet, refreshHistory]);
+    }, [contract, connected, contractBalance, walletBalance, T.bet1, T.bet2, wallet, scheduleHistoryRefresh]);
     
     // Создаем функцию отправки ставки
     const sendBetTransaction = createBetTransaction(handleFlip);
