@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { Theme, TonConnectUIProvider, UIPreferences } from '@tonconnect/ui-react';
 import { ThemeProvider } from '@/components/theme';
 import Header from './pages/header';
+import Footer from './pages/footer';
 import MainPage from './pages/main';
 import HistoryPage from './pages/history';
 
@@ -46,6 +47,7 @@ function App() {
                       <Route path="/history" element={<HistoryPage/>} />
                     </Routes>
                   </Router>
+                  <Footer />
                 </div>
           </ThemeProvider>
         </TranslationContextProvider>

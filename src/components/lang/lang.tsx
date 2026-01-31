@@ -24,6 +24,12 @@ export interface ILang{
   usdtortoken:string;
   apy_value: string;
   project_losing_get: string;
+  footerMadeWith: string;
+  footerBy: string;
+  githubButton: string;
+  contractButton: string;
+  testnetBanner: string;
+  telegramButton: string;
   [key: string]: string;
 }
 
@@ -107,6 +113,12 @@ export const en : ILang ={
   minutesAgo: 'min. ago',
   hoursAgo: 'h. ago',
   daysAgo: 'days ago',
+  footerMadeWith: 'Made with',
+  footerBy: 'by',
+  githubButton: 'GitHub',
+  contractButton: 'Contract',
+  testnetBanner: 'TESTNET version of the site',
+  telegramButton: 'Telegram author',
 };
 
 export const ru: ILang ={
@@ -188,4 +200,10 @@ export const ru: ILang ={
   minutesAgo: 'мин. назад',
   hoursAgo: 'ч. назад',
   daysAgo: 'дн. назад',
+  footerMadeWith: 'Сделанно с',
+  footerBy: 'by',
+  githubButton: 'GitHub',
+  contractButton: 'Смартконтракт',
+  testnetBanner: 'Версия сайта для TESTNET',
+  telegramButton: 'Телеграм автора',
 };
