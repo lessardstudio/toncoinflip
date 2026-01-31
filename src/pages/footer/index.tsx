@@ -30,12 +30,13 @@ const TelegramIcon = ({ className = "" }: { className?: string }) => (
 
 export default function Footer() {
   const { translations: T } = useTranslation();
+  const isMobile = window.innerWidth <= 768;
 
   return (
     <footer className="w-full mt-4">
       <div className="relative flex flex-col rounded-[25px] overflow-hidden bg-[hsla(var(--main-col-bg)/1)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-sm">
-          <div className="text-left text-[hsla(var(--foreground)/0.7)] text-family-['Inter',sans-serif] text-sm font-medium select-none">
+          <div className={"mx-3 my-3 text-left text-[hsla(var(--foreground)/0.7)] text-family-['Inter',sans-serif] text-sm font-medium select-none" + (isMobile ? " text-center" : "")}>
             CoinFlip TON network © 2026. {T.footerMadeWith} <span role="img" aria-label="love">{"\u2764\uFE0F"}</span>
           </div>
           <div className="flex justify-center sm:justify-end gap-2 flex-wrap">
