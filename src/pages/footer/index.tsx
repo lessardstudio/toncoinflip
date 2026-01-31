@@ -1,5 +1,6 @@
 import { useTranslation } from "@/components/lang";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 const telegramUrl = "https://t.me/forcebear";
 const githubUrl = import.meta.env.VITE_GITHUB_URL || "https://github.com";
@@ -30,7 +31,13 @@ const TelegramIcon = ({ className = "" }: { className?: string }) => (
 
 export default function Footer() {
   const { translations: T } = useTranslation();
-  const isMobile = window.innerWidth <= 768;
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   return (
     <footer className="w-full mt-4">
